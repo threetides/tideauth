@@ -49,7 +49,7 @@ func (a *Auth) Migrate(ctx context.Context) error {
 	db, err := sql.Open("postgres", a.cfg.DatabaseURL)
 	driver, err := postgres.WithInstance(db, &postgres.Config{})
 	m, err := migrate.NewWithDatabaseInstance(
-		"/internal/migrations",
+		"file://internal/migrations",
 		"postgres", driver)
 	m.Up()
 
