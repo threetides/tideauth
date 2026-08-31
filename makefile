@@ -1,4 +1,4 @@
 dev: 
-	go run main.go
+	go run cmd/main.go
 lint:
 	golangci-lint run
