@@ -102,12 +102,14 @@ func (cfg *GoogleCFG) GoogleCallback() http.HandlerFunc {
 		}
 
 		// Insert into db
-		err = InsertUserData(cfg.DB, claims)
+		sessionCookie, err := InsertUserData(r.Context(), cfg.DB, claims)
 		if err != nil {
 			log.Println("Error inserting user into db:", err)
 			httpx.WriteJSON(w, http.StatusInternalServerError, "Internal server error", nil)
 			return
 		}
+
+		http.SetCookie(w, sessionCookie)
 
 		http.Redirect(w, r, os.Getenv("CORS_ORIGIN")+"/", http.StatusTemporaryRedirect)
 	}

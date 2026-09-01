@@ -11,7 +11,7 @@ import (
 func GoogleConfig(clientID string, clientSecret string, redirectURL string) (*GoogleCFG, error) {
 	provider, err := oidc.NewProvider(context.Background(), "https://accounts.google.com")
 	if err != nil {
-		return nil, fmt.Errorf("error connecting to db: %e", err)
+		return nil, fmt.Errorf("error connecting to db: %v", err)
 	}
 
 	// Configure an OpenID Connect aware OAuth2 client.

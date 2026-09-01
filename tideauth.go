@@ -22,7 +22,7 @@ type Google struct {
 }
 
 type Config struct {
-	DatabaseURL  string
+	DB           *pgxpool.Pool
 	CookieDomain string
 	Google       Google
 }
@@ -33,34 +33,23 @@ type Auth struct {
 }
 
 func New(cfg Config) (*Auth, error) {
-	// Connect to db
-	db, err := pgxpool.New(context.Background(), cfg.DatabaseURL)
-	if err != nil {
-		return nil, fmt.Errorf("error connecting to db: %e", err)
-	}
-
-	defer db.Close()
-
-	err = db.Ping(context.Background())
-
-	if err != nil {
-		return nil, fmt.Errorf("error pinging db: %e", err)
-	}
-
-	log.Println("Connected to db")
-
-	return &Auth{db: db, cfg: cfg}, nil
+	return &Auth{db: cfg.DB, cfg: cfg}, nil
 }
 
 func (a *Auth) Migrate(ctx context.Context) error {
-	db, err := sql.Open("postgres", a.cfg.DatabaseURL)
+	db, err := sql.Open("postgres", a.cfg.DB.Config().ConnString())
 	if err != nil {
-		return fmt.Errorf("error opening db connection: %e", err)
+		return fmt.Errorf("error opening db connection: %v", err)
 	}
+	defer func() {
+		if err := db.Close(); err != nil {
+			log.Println("Error closing db connection:", err)
+		}
+	}()
 
 	driver, err := postgres.WithInstance(db, &postgres.Config{})
 	if err != nil {
-		return fmt.Errorf("error creating postgres driver: %e", err)
+		return fmt.Errorf("error creating postgres driver: %v", err)
 	}
 
 	m, err := migrate.NewWithDatabaseInstance(
@@ -68,7 +57,7 @@ func (a *Auth) Migrate(ctx context.Context) error {
 		"postgres", driver)
 
 	if err != nil {
-		return fmt.Errorf("error running migrate.NewWithDatabaseInstance(): %e", err)
+		return fmt.Errorf("error running migrate.NewWithDatabaseInstance(): %v", err)
 	}
 	_ = m.Up()
 
@@ -80,7 +69,7 @@ func (a *Auth) Routes() (http.Handler, error) {
 	mux := http.NewServeMux()
 	googleCFG, err := auth.GoogleConfig(a.cfg.Google.ClientID, a.cfg.Google.ClientSecret, a.cfg.Google.RedirectURL)
 	if err != nil {
-		return nil, fmt.Errorf("error configuring Google: %e", err)
+		return nil, fmt.Errorf("error configuring Google: %v", err)
 	}
 
 	authHandler := &auth.GoogleCFG{Config: googleCFG.Config, IDTokenVerifier: googleCFG.IDTokenVerifier, DB: a.db}

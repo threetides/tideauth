@@ -11,6 +11,7 @@ type claims struct {
 	EmailVerified bool   `json:"email_verified"`
 	Name          string `json:"name"`
 	Picture       string `json:"picture"`
+	Sub           string `json:"sub"`
 }
 
 type GoogleCFG struct {

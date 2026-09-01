@@ -8,6 +8,7 @@ import (
 	"os"
 	"strings"
 
+	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/joho/godotenv"
 	"github.com/rs/cors"
 	"github.com/threetides/tideauth"
@@ -32,8 +33,22 @@ func main() {
 	// Insert the middleware
 	handler := c.Handler(mux)
 
+	// Connect to db
+	db, err := pgxpool.New(context.Background(), os.Getenv("DB_CONNECTION_STRING"))
+	if err != nil {
+		log.Fatalln("Error connecting to db:", err)
+	}
+	defer db.Close()
+
+	err = db.Ping(context.Background())
+	if err != nil {
+		log.Fatalln("Error pinging db:", err)
+	}
+	log.Println("Connected to db")
+
+	// Create config for tideauth
 	cfg := tideauth.Config{
-		DatabaseURL:  "postgresql://neondb_owner:npg_8diGkXRB9SuT@ep-tiny-dawn-b2ceanjt-pooler.c-6.eu-central-1.aws.neon.tech/neondb?sslmode=require&channel_binding=require",
+		DB:           db,
 		CookieDomain: "threetides.dev",
 		Google:       tideauth.Google{ClientID: "130842386503-76h06e8652uq9nc7nptpc8puth4dvljp.apps.googleusercontent.com", ClientSecret: "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", RedirectURL: fmt.Sprintf("%v/api/auth/google/callback", os.Getenv("REDIRECT_URL"))},
 	}
