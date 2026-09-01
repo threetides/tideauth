@@ -250,3 +250,8 @@ func InsertGoogleData(ctx context.Context, db *pgxpool.Pool, claims claims) (coo
 
 	return cookie, nil
 }
+
+func (Auth *AuthHandler) UserIDFromContext(ctx context.Context) (string, bool) {
+	userID, ok := ctx.Value(userIDKey).(string)
+	return userID, ok
+}
