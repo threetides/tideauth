@@ -1,16 +1,42 @@
 package auth
 
 import (
+	"crypto/rand"
+	"encoding/base64"
+	"fmt"
 	"log"
 	"net/http"
+	"os"
+	"time"
 
 	"github.com/threetides/tideauth/internal/httpx"
 )
 
 func (cfg *GoogleCFG) GoogleSignIn() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		state := ""
+		// Generate random state string
+		b := make([]byte, 32)
+		_, err := rand.Read(b)
+		if err != nil {
+			log.Println("Error creating random state:", err)
+			httpx.WriteJSON(w, http.StatusInternalServerError, "Internal server error", nil)
+			return
+		}
+		state := base64.RawURLEncoding.EncodeToString(b)
 
+		// Set short lived httpOnlyCookie
+		cookie := http.Cookie{
+			Name:     "state",
+			Value:    state,
+			Path:     "/",
+			Expires:  time.Now().Add(5 * time.Minute),
+			HttpOnly: true,
+			Secure:   os.Getenv("COOKIE_SECURE") == "true",
+			SameSite: http.SameSiteLaxMode,
+		}
+		http.SetCookie(w, &cookie)
+
+		// Redirect to the login flow with state in url
 		http.Redirect(w, r, cfg.Config.AuthCodeURL(state), http.StatusFound)
 	}
 }
@@ -18,7 +44,33 @@ func (cfg *GoogleCFG) GoogleSignIn() http.HandlerFunc {
 func (cfg *GoogleCFG) GoogleCallback() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		// Verify state and errors.
+		state := r.URL.Query().Get("state")
+		cookie, err := r.Cookie("state")
+		if err != nil {
+			log.Println("Error retrieving cookie:", err)
+			httpx.WriteJSON(w, http.StatusInternalServerError, "Internal server error", nil)
+			return
+		}
 
+		if state != cookie.Value {
+			httpx.WriteJSON(w, http.StatusUnauthorized, "Unauthorized", nil)
+			return
+		}
+
+		// Clear cookie
+		clearedCookie := &http.Cookie{
+			Name:     "state",
+			Value:    state,
+			Path:     "/",
+			Expires:  time.Unix(0, 0),
+			MaxAge:   -1,
+			HttpOnly: true,
+			Secure:   os.Getenv("COOKIE_SECURE") == "true",
+			SameSite: http.SameSiteLaxMode,
+		}
+		http.SetCookie(w, clearedCookie)
+
+		// Get OAuth2 token
 		oauth2Token, err := cfg.Config.Exchange(r.Context(), r.URL.Query().Get("code"))
 		if err != nil {
 			log.Println("Error creating oauth2Token:", err)
@@ -51,8 +103,9 @@ func (cfg *GoogleCFG) GoogleCallback() http.HandlerFunc {
 		}
 
 		// Insert into db
+		fmt.Println(claims)
 
-		httpx.WriteJSON(w, http.StatusOK, "Callback successful", claims)
+		http.Redirect(w, r, os.Getenv("CORS_ORIGIN")+"/", http.StatusTemporaryRedirect)
 	}
 }
 
