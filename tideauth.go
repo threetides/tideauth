@@ -10,7 +10,7 @@ import (
 	"net/http"
 
 	"github.com/golang-migrate/migrate/v4"
-	"github.com/golang-migrate/migrate/v4/database/postgres"
+	"github.com/golang-migrate/migrate/v4/database/pgx"
 	"github.com/golang-migrate/migrate/v4/source/iofs"
 	"github.com/jackc/pgx/v5/pgxpool"
 	_ "github.com/jackc/pgx/v5/stdlib"
@@ -52,9 +52,9 @@ func (a *Auth) Migrate(ctx context.Context) error {
 		}
 	}()
 
-	driver, err := postgres.WithInstance(db, &postgres.Config{})
+	driver, err := pgx.WithInstance(db, &pgx.Config{})
 	if err != nil {
-		return fmt.Errorf("error creating postgres driver: %v", err)
+		return fmt.Errorf("error creating pgx driver: %v", err)
 	}
 
 	// 2. Wrap the embedded folder using iofs
@@ -63,7 +63,7 @@ func (a *Auth) Migrate(ctx context.Context) error {
 		return fmt.Errorf("error getting migration files: %v", err)
 	}
 
-	m, err := migrate.NewWithInstance("iofs", d, "postgres", driver)
+	m, err := migrate.NewWithInstance("iofs", d, "pgx", driver)
 	if err != nil {
 		return fmt.Errorf("error creating m *migrate.Migrate: %v", err)
 	}
