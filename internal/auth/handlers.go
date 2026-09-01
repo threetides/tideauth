@@ -3,7 +3,6 @@ package auth
 import (
 	"crypto/rand"
 	"encoding/base64"
-	"fmt"
 	"log"
 	"net/http"
 	"os"
@@ -103,7 +102,12 @@ func (cfg *GoogleCFG) GoogleCallback() http.HandlerFunc {
 		}
 
 		// Insert into db
-		fmt.Println(claims)
+		err = InsertUserData(cfg.DB, claims)
+		if err != nil {
+			log.Println("Error inserting user into db:", err)
+			httpx.WriteJSON(w, http.StatusInternalServerError, "Internal server error", nil)
+			return
+		}
 
 		http.Redirect(w, r, os.Getenv("CORS_ORIGIN")+"/", http.StatusTemporaryRedirect)
 	}
