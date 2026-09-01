@@ -29,7 +29,7 @@ if err != nil {
 // Create config for tideauth
 cfg := tideauth.Config{
 	DB:           db,
-	CookieDomain: "threetides.dev",
+	CookieDomain: "example.com",
 	Google: tideauth.Google{
 		ClientID:     os.Getenv("GOOGLE_CLIENT_ID"),
 		ClientSecret: os.Getenv("GOOGLE_CLIENT_SECRET"),
