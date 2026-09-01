@@ -56,8 +56,8 @@ along in the request context.
 
 `cmd/main.go` is an example server that mounts the package the way a consuming
 service would, with CORS, a health route, and a protected test route. It reads
-`DB_CONNECTION_STRING`, `CORS_ORIGIN`, and `REDIRECT_URL` from a `.env` file
-(or the environment).
+`DB_CONNECTION_STRING`, `CORS_ORIGIN`, `REDIRECT_URL`, `TEST_CLIENT_ID`, and
+`TEST_CLIENT_SECRET` from a `.env` file (or the environment).
 
 With Go, Postgres, and [golangci-lint](https://golangci-lint.run) installed:
 
