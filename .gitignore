@@ -24,6 +24,9 @@
 !*.yaml
 !*.yml
 
+# !sql
+!*.sql
+
 # ...even if they are in subdirectories
 !*/
 
