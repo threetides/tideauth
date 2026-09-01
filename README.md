@@ -5,8 +5,8 @@ The threetides studio's authentication package.
 `tideauth` is a Go package that handles every aspect of authentication for the
 studio's services: OAuth2 and OIDC sign-in, sessions, and the user data tables
 behind them. A service imports the package, fills in a `Config`, and gets back
-its migrations and a set of `net/http` routes to mount — no auth code of its
-own. It currently supports Google sign-in, with more providers to come, and
+its migrations and a set of `net/http` routes to mount, with no auth code of
+its own. It currently supports Google sign-in, with more providers to come, and
 will eventually replace the built-in auth in multe.
 
 ## Usage
@@ -39,8 +39,8 @@ routes, err := auth.Routes()
 mux.Handle("/api/auth/", http.StripPrefix("/api/auth", routes))
 ```
 
-`Migrate` creates and maintains the user data tables — `users`,
-`oauth_accounts`, `passwords`, and `sessions` — in the configured Postgres
+`Migrate` creates and maintains the user data tables (`users`,
+`oauth_accounts`, `passwords`, and `sessions`) in the configured Postgres
 database. `Routes` returns a handler serving `GET /google/sign-in`,
 `GET /google/callback`, and `POST /sign-out`.
 
@@ -61,7 +61,7 @@ make lint    # lint the package
 
 ```
 tideauth/
-├── tideauth.go       the package — Config, New, Migrate, Routes
+├── tideauth.go       the package: Config, New, Migrate, Routes
 ├── cmd/main.go       an example server that mounts the package
 └── internal/
     ├── auth/         Google OAuth2/OIDC configuration and handlers
