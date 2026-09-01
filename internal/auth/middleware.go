@@ -15,7 +15,7 @@ import (
 
 type contextKey string
 
-const userIDKey contextKey = "userID"
+const UserIDKey contextKey = "userID"
 
 func (Auth *AuthHandler) Protected(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
@@ -79,7 +79,7 @@ func (Auth *AuthHandler) Protected(next http.HandlerFunc) http.HandlerFunc {
 		}
 
 		// Create a new context containing the value
-		ctx := context.WithValue(r.Context(), userIDKey, userID)
+		ctx := context.WithValue(r.Context(), UserIDKey, userID)
 
 		next(w, r.WithContext(ctx))
 	}

@@ -80,6 +80,11 @@ func (a *Auth) Protected(next http.HandlerFunc) http.HandlerFunc {
 	return authWithDB.Protected(next)
 }
 
+func (a *Auth) UserIDFromContext(ctx context.Context) (string, bool) {
+	userID, ok := ctx.Value(auth.UserIDKey).(string)
+	return userID, ok
+}
+
 func (a *Auth) Routes() (http.Handler, error) {
 	mux := http.NewServeMux()
 	googleCFG, err := auth.GoogleConfig(a.cfg.Google.ClientID, a.cfg.Google.ClientSecret, a.cfg.Google.RedirectURL)
