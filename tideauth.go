@@ -72,10 +72,12 @@ func (a *Auth) Routes() (http.Handler, error) {
 		return nil, fmt.Errorf("error configuring Google: %v", err)
 	}
 
-	authHandler := &auth.GoogleCFG{Config: googleCFG.Config, IDTokenVerifier: googleCFG.IDTokenVerifier, DB: a.db}
+	googleHandler := &auth.GoogleCFG{Config: googleCFG.Config, IDTokenVerifier: googleCFG.IDTokenVerifier, DB: a.db}
+	authHandler := &auth.AuthHandler{DB: a.db}
 
-	mux.HandleFunc("GET /google/sign-in", authHandler.GoogleSignIn())
-	mux.HandleFunc("GET /google/callback", authHandler.GoogleCallback())
-	mux.HandleFunc("POST /sign-out", auth.SignOut())
+	mux.HandleFunc("GET /google/sign-in", googleHandler.GoogleSignIn())
+	mux.HandleFunc("GET /google/callback", googleHandler.GoogleCallback())
+	mux.HandleFunc("GET /session", authHandler.GetSession())
+	mux.HandleFunc("POST /sign-out", authHandler.SignOut())
 	return mux, nil
 }

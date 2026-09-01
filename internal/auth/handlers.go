@@ -2,12 +2,16 @@ package auth
 
 import (
 	"crypto/rand"
+	"crypto/sha256"
 	"encoding/base64"
+	"encoding/hex"
+	"errors"
 	"log"
 	"net/http"
 	"os"
 	"time"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/threetides/tideauth/internal/httpx"
 )
 
@@ -57,17 +61,14 @@ func (cfg *GoogleCFG) GoogleCallback() http.HandlerFunc {
 		}
 
 		// Clear cookie
-		clearedCookie := &http.Cookie{
+		http.SetCookie(w, &http.Cookie{
 			Name:     "state",
-			Value:    state,
+			Value:    "",
 			Path:     "/",
-			Expires:  time.Unix(0, 0),
 			MaxAge:   -1,
+			Expires:  time.Unix(0, 0),
 			HttpOnly: true,
-			Secure:   os.Getenv("COOKIE_SECURE") == "true",
-			SameSite: http.SameSiteLaxMode,
-		}
-		http.SetCookie(w, clearedCookie)
+		})
 
 		// Get OAuth2 token
 		oauth2Token, err := cfg.Config.Exchange(r.Context(), r.URL.Query().Get("code"))
@@ -115,8 +116,80 @@ func (cfg *GoogleCFG) GoogleCallback() http.HandlerFunc {
 	}
 }
 
-func SignOut() http.HandlerFunc {
+func (Auth *AuthHandler) GetSession() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		httpx.WriteJSON(w, http.StatusOK, "Signed out", nil)
+		cookie, err := r.Cookie("session")
+		if err != nil {
+			httpx.WriteJSON(w, http.StatusUnauthorized, "Unauthorized", nil)
+			return
+		}
+
+		hash := sha256.Sum256([]byte(cookie.Value))
+		tokenHash := hex.EncodeToString(hash[:])
+
+		userIDQuery :=
+			`SELECT user_id FROM sessions WHERE token_hash = $1 AND expires_at > now()`
+
+		var userID string
+
+		err = Auth.DB.QueryRow(r.Context(), userIDQuery, tokenHash).Scan(&userID)
+		if err != nil && !errors.Is(err, pgx.ErrNoRows) {
+			log.Println("Error quering database:", err)
+			httpx.WriteJSON(w, http.StatusUnauthorized, "Unauthorized", nil)
+			return
+		}
+
+		if userID == "" {
+			httpx.WriteJSON(w, http.StatusUnauthorized, "Unauthorized", nil)
+			return
+		}
+
+		var user User
+		userQuery :=
+			`SELECT id, email, name, email_verified, created_at FROM users WHERE id = $1`
+
+		err = Auth.DB.QueryRow(r.Context(), userQuery, userID).Scan(&user.ID, &user.Email, &user.Name, &user.EmailVerified, &user.CreatedAt)
+		if err != nil && !errors.Is(err, pgx.ErrNoRows) {
+			log.Println("Error quering database:", err)
+			httpx.WriteJSON(w, http.StatusInternalServerError, "Internal server error", nil)
+			return
+		}
+
+		httpx.WriteJSON(w, http.StatusOK, "Authorized", user)
+	}
+}
+
+func (Auth *AuthHandler) SignOut() http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		cookie, err := r.Cookie("session")
+		if err != nil {
+			httpx.WriteJSON(w, http.StatusUnauthorized, "Unauthorized", nil)
+			return
+		}
+
+		hash := sha256.Sum256([]byte(cookie.Value))
+		tokenHash := hex.EncodeToString(hash[:])
+
+		query :=
+			`DELETE from sessions WHERE token_hash = $1`
+
+		_, err = Auth.DB.Exec(r.Context(), query, tokenHash)
+		if err != nil {
+			httpx.WriteJSON(w, http.StatusInternalServerError, "Internal server error", nil)
+			log.Println("error deleting session:", err)
+			return
+		}
+
+		// Clear cookie
+		http.SetCookie(w, &http.Cookie{
+			Name:     "session",
+			Value:    "",
+			Path:     "/",
+			MaxAge:   -1,
+			Expires:  time.Unix(0, 0),
+			HttpOnly: true,
+		})
+
+		httpx.WriteJSON(w, http.StatusOK, "Logged out", nil)
 	}
 }
