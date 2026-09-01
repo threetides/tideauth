@@ -32,8 +32,8 @@ type Auth struct {
 	cfg Config
 }
 
-func New(cfg Config) (*Auth, error) {
-	return &Auth{db: cfg.DB, cfg: cfg}, nil
+func New(cfg Config) *Auth {
+	return &Auth{db: cfg.DB, cfg: cfg}
 }
 
 func (a *Auth) Migrate(ctx context.Context) error {
@@ -63,6 +63,11 @@ func (a *Auth) Migrate(ctx context.Context) error {
 
 	log.Println("Migrations completed")
 	return nil
+}
+
+func (a *Auth) Protected(next http.HandlerFunc) http.HandlerFunc {
+	authWithDB := auth.AuthHandler{DB: a.db}
+	return authWithDB.Protected(next)
 }
 
 func (a *Auth) Routes() (http.Handler, error) {

@@ -12,6 +12,7 @@ import (
 	"github.com/joho/godotenv"
 	"github.com/rs/cors"
 	"github.com/threetides/tideauth"
+	"github.com/threetides/tideauth/cmd/internal/test"
 	"github.com/threetides/tideauth/internal/httpx"
 )
 
@@ -53,10 +54,7 @@ func main() {
 		Google:       tideauth.Google{ClientID: "130842386503-76h06e8652uq9nc7nptpc8puth4dvljp.apps.googleusercontent.com", ClientSecret: "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", RedirectURL: fmt.Sprintf("%v/api/auth/google/callback", os.Getenv("REDIRECT_URL"))},
 	}
 
-	auth, err := tideauth.New(cfg)
-	if err != nil {
-		log.Fatalln("Error configuring tideauth:", err)
-	}
+	auth := tideauth.New(cfg)
 
 	err = auth.Migrate(context.Background())
 	if err != nil {
@@ -75,6 +73,8 @@ func main() {
 
 	// Handlers
 	mux.Handle("/api/auth/", http.StripPrefix("/api/auth", authRoutes))
+
+	mux.HandleFunc("GET /api/test", auth.Protected(test.TestHandler()))
 
 	log.Println("Server started on port", port)
 	log.Fatal(http.ListenAndServe(fmt.Sprintf(":%v", port), handler))
