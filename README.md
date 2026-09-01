@@ -60,22 +60,62 @@ mux.HandleFunc("GET /api/me", auth.Protected(meHandler))
 
 ## API
 
-- `New(cfg Config) *Auth` creates an `Auth` from the config. It does no I/O;
-  the pgx pool is created, owned, and closed by the caller.
-- `Migrate(ctx context.Context) error` applies the embedded SQL migrations,
-  creating and maintaining the user data tables: `users`, `oauth_accounts`,
-  `passwords`, and `sessions`. Safe to run on every startup.
-- `Routes() (http.Handler, error)` returns a handler serving `POST /sign-up`,
-  `POST /sign-in`, `GET /google/sign-in`, `GET /google/callback`,
-  `GET /session`, and `POST /sign-out`. Sign-up validates the email address
-  and stores the password as a bcrypt hash.
-- `Protected(next http.HandlerFunc) http.HandlerFunc` wraps a handler with
-  session validation: it checks the session cookie against the database,
-  slides the session's expiry another 30 days, and puts the user's id in the
-  request context. Requests without a valid session get a 401.
-- `UserIDFromContext(ctx context.Context) (string, bool)` reads the user id
-  that `Protected` stored in the request context; the bool reports whether it
-  was there.
+### New
+
+```go
+func New(cfg Config) *Auth
+```
+
+Creates an `Auth` from the config. It does no I/O; the pgx pool is created,
+owned, and closed by the caller.
+
+### Migrate
+
+```go
+func (a *Auth) Migrate(ctx context.Context) error
+```
+
+Applies the embedded SQL migrations, creating and maintaining the user data
+tables: `users`, `oauth_accounts`, `passwords`, and `sessions`. Safe to run on
+every startup.
+
+### Routes
+
+```go
+func (a *Auth) Routes() (http.Handler, error)
+```
+
+Returns a handler serving the auth endpoints:
+
+```
+POST /sign-up            create a user with email and password
+POST /sign-in            sign in with email and password
+GET  /google/sign-in     redirect to Google's consent screen
+GET  /google/callback    complete the Google sign-in
+GET  /session            the signed-in user's profile
+POST /sign-out           end the session
+```
+
+Sign-up validates the email address and stores the password as a bcrypt hash.
+
+### Protected
+
+```go
+func (a *Auth) Protected(next http.HandlerFunc) http.HandlerFunc
+```
+
+Wraps a handler with session validation: it checks the session cookie against
+the database, slides the session's expiry another 30 days, and puts the user's
+id in the request context. Requests without a valid session get a 401.
+
+### UserIDFromContext
+
+```go
+func (a *Auth) UserIDFromContext(ctx context.Context) (string, bool)
+```
+
+Reads the user id that `Protected` stored in the request context; the bool
+reports whether it was there.
 
 ## Development
 
