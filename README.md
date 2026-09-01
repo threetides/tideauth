@@ -6,15 +6,15 @@ The threetides studio's authentication package.
 studio's services: OAuth2 and OIDC sign-in, sessions, and the user data tables
 behind them. A service imports the package, fills in a `Config`, and gets back
 its migrations, a set of `net/http` routes to mount, and middleware for
-protecting its own routes, with no auth code of its own. It currently supports email and password sign-in and Google sign-in,
-with more providers to come.
+protecting its own routes, with no auth code of its own. It currently supports
+email and password sign-in and Google sign-in, with more providers to come.
 
 ## Usage
 
 Install the package:
 
 ```sh
-go get github.com/threetides/tideauth
+go get github.com/threetides/tideauth@latest
 ```
 
 Configure it, run its migrations, and mount its routes:
@@ -49,10 +49,9 @@ mux.HandleFunc("GET /api/me", auth.Protected(meHandler))
 the pool. `Routes` returns a handler serving `POST /sign-up`, `POST /sign-in`,
 `GET /google/sign-in`, `GET /google/callback`, `GET /session`, and
 `POST /sign-out`; sign-up validates the email address and stores the password
-as a bcrypt hash. `Protected` wraps
-a handler with session validation: it checks the session cookie against the
-database, slides the session's expiry another 30 days, and passes the user's id
-along in the request context.
+as a bcrypt hash. `Protected` wraps a handler with session validation: it
+checks the session cookie against the database, slides the session's expiry
+another 30 days, and passes the user's id along in the request context.
 
 ## Development
 
