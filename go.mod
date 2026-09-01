@@ -3,6 +3,7 @@ module github.com/threetides/tideauth
 go 1.27.0
 
 require (
+	github.com/AfterShip/email-verifier v1.4.1
 	github.com/coreos/go-oidc/v3 v3.20.0
 	github.com/golang-migrate/migrate/v4 v4.19.1
 	github.com/jackc/pgx/v5 v5.10.0
@@ -13,6 +14,7 @@ require (
 
 require (
 	github.com/go-jose/go-jose/v4 v4.1.4 // indirect
+	github.com/hbollon/go-edlib v1.6.0 // indirect
 	github.com/jackc/chunkreader/v2 v2.0.1 // indirect
 	github.com/jackc/pgconn v1.14.3 // indirect
 	github.com/jackc/pgerrcode v0.0.0-20220416144525-469b46aa5efa // indirect
@@ -25,6 +27,7 @@ require (
 	github.com/jackc/puddle/v2 v2.2.2 // indirect
 	github.com/lib/pq v1.10.9 // indirect
 	golang.org/x/crypto v0.45.0 // indirect
+	golang.org/x/net v0.47.0 // indirect
 	golang.org/x/sync v0.18.0 // indirect
 	golang.org/x/text v0.31.0 // indirect
 )

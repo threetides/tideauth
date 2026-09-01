@@ -90,6 +90,8 @@ func (a *Auth) Routes() (http.Handler, error) {
 	googleHandler := &auth.GoogleCFG{Config: googleCFG.Config, IDTokenVerifier: googleCFG.IDTokenVerifier, DB: a.db}
 	authHandler := &auth.AuthHandler{DB: a.db}
 
+	mux.HandleFunc("POST /sign-up", authHandler.SignUp())
+	mux.HandleFunc("POST /sign-in", authHandler.SignIn())
 	mux.HandleFunc("GET /google/sign-in", googleHandler.GoogleSignIn())
 	mux.HandleFunc("GET /google/callback", googleHandler.GoogleCallback())
 	mux.HandleFunc("GET /session", authHandler.GetSession())

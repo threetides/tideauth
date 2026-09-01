@@ -16,6 +16,17 @@ type claims struct {
 	Sub           string `json:"sub"`
 }
 
+type signUp struct {
+	Email    string `json:"email"`
+	Name     string `json:"name"`
+	Password string `json:"password"`
+}
+
+type signIn struct {
+	Email    string `json:"email"`
+	Password string `json:"password"`
+}
+
 type GoogleCFG struct {
 	Config          oauth2.Config
 	IDTokenVerifier *oidc.IDTokenVerifier
@@ -32,4 +43,9 @@ type User struct {
 	Name          string    `json:"name"`
 	EmailVerified bool      `json:"emailVerified"`
 	CreatedAt     time.Time `json:"createdAt"`
+}
+
+type fieldError struct {
+	Field string `json:"field"`
+	Error string `json:"error"`
 }

@@ -5,15 +5,151 @@ import (
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"log"
 	"net/http"
 	"os"
+	"regexp"
+	"strings"
 	"time"
 
+	emailverifier "github.com/AfterShip/email-verifier"
 	"github.com/jackc/pgx/v5"
 	"github.com/threetides/tideauth/internal/httpx"
 )
+
+var verifier = emailverifier.NewVerifier()
+
+var hasLower = regexp.MustCompile(`\p{Ll}`)
+var hasUpper = regexp.MustCompile(`\p{Lu}`)
+var hasDigit = regexp.MustCompile(`[0-9]`)
+
+func (Auth *AuthHandler) SignUp() http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		var signUpData signUp
+		err := json.NewDecoder(r.Body).Decode(&signUpData)
+		if err != nil {
+			httpx.WriteJSON(w, http.StatusBadRequest, "Invalid json", nil)
+			return
+		}
+
+		var fieldErrors []fieldError
+
+		email := strings.TrimSpace(signUpData.Email)
+		name := strings.TrimSpace(signUpData.Name)
+		password := strings.TrimSpace(signUpData.Password)
+
+		if email == "" {
+			fieldErrors = append(fieldErrors, fieldError{Field: "email", Error: "Email is required"})
+		} else {
+			verified, err := verifier.Verify(email)
+			if err != nil || !verified.Syntax.Valid {
+				fieldErrors = append(fieldErrors, fieldError{Field: "email", Error: "Email is invalid"})
+			}
+		}
+
+		if name == "" {
+			fieldErrors = append(fieldErrors, fieldError{Field: "name", Error: "Name is required"})
+		} else if len(name) > 255 {
+			fieldErrors = append(fieldErrors, fieldError{Field: "name", Error: "Name can't contain more than 255 characters"})
+		}
+
+		if password == "" {
+			fieldErrors = append(fieldErrors, fieldError{Field: "password", Error: "Password is required"})
+		} else {
+			if len(password) < 8 {
+				fieldErrors = append(fieldErrors, fieldError{Field: "password", Error: "Password must contain at least 8 characters"})
+			} else {
+				if len(password) > 128 {
+					fieldErrors = append(fieldErrors, fieldError{Field: "password", Error: "Password can't contain more than 128 characters"})
+				}
+				if !hasLower.MatchString(password) {
+					fieldErrors = append(fieldErrors, fieldError{Field: "password", Error: "Password must contain at least one lowercase letter"})
+				}
+				if !hasUpper.MatchString(password) {
+					fieldErrors = append(fieldErrors, fieldError{Field: "password", Error: "Password must contain at least one uppercase letter"})
+				}
+				if !hasDigit.MatchString(password) {
+					fieldErrors = append(fieldErrors, fieldError{Field: "password", Error: "Password must contain at least one digit"})
+				}
+			}
+		}
+
+		if len(fieldErrors) > 0 {
+			httpx.WriteJSON(w, http.StatusBadRequest, "Bad request", fieldErrors)
+			return
+		}
+
+		sessionCookie, err := InsertUserData(r.Context(), Auth.DB, signUp{
+			Email:    email,
+			Name:     name,
+			Password: password,
+		})
+		if err != nil {
+			if errors.Is(err, ErrEmailExists) {
+				httpx.WriteJSON(w, http.StatusConflict, "An account with this email is already registered", nil)
+				return
+			}
+
+			log.Println("Error inserting user into db:", err)
+			httpx.WriteJSON(w, http.StatusInternalServerError, "Internal server error", nil)
+			return
+		}
+
+		http.SetCookie(w, sessionCookie)
+
+		httpx.WriteJSON(w, http.StatusCreated, "Signed up", nil)
+	}
+}
+
+func (Auth *AuthHandler) SignIn() http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		var signInData signIn
+		err := json.NewDecoder(r.Body).Decode(&signInData)
+		if err != nil {
+			httpx.WriteJSON(w, http.StatusBadRequest, "Invalid json", nil)
+			return
+		}
+
+		var fieldErrors []fieldError
+
+		email := strings.TrimSpace(signInData.Email)
+		password := strings.TrimSpace(signInData.Password)
+
+		if email == "" {
+			fieldErrors = append(fieldErrors, fieldError{Field: "email", Error: "Email is required"})
+		}
+
+		if password == "" {
+			fieldErrors = append(fieldErrors, fieldError{Field: "password", Error: "Password is required"})
+		}
+
+		if len(fieldErrors) > 0 {
+			httpx.WriteJSON(w, http.StatusBadRequest, "Bad request", fieldErrors)
+			return
+		}
+
+		sessionCookie, err := SignIn(r.Context(), Auth.DB, signIn{
+			Email:    email,
+			Password: password,
+		})
+		if err != nil {
+			if errors.Is(err, InvalidEmailOrPassword) {
+				httpx.WriteJSON(w, http.StatusConflict, "Invalid email or password", nil)
+				return
+			}
+
+			log.Println("Error signing in:", err)
+			httpx.WriteJSON(w, http.StatusInternalServerError, "Internal server error", nil)
+			return
+		}
+
+		http.SetCookie(w, sessionCookie)
+
+		httpx.WriteJSON(w, http.StatusOK, "Signed in", nil)
+	}
+}
 
 func (cfg *GoogleCFG) GoogleSignIn() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
@@ -103,7 +239,7 @@ func (cfg *GoogleCFG) GoogleCallback() http.HandlerFunc {
 		}
 
 		// Insert into db
-		sessionCookie, err := InsertUserData(r.Context(), cfg.DB, claims)
+		sessionCookie, err := InsertGoogleData(r.Context(), cfg.DB, claims)
 		if err != nil {
 			log.Println("Error inserting user into db:", err)
 			httpx.WriteJSON(w, http.StatusInternalServerError, "Internal server error", nil)
