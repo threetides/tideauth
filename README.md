@@ -22,6 +22,9 @@ Configure it, run its migrations, and mount its routes:
 ```go
 // Connect to db
 db, err := pgxpool.New(context.Background(), os.Getenv("DB_CONNECTION_STRING"))
+if err != nil {
+	log.Fatalln("Error connecting to db:", err)
+}
 
 // Create config for tideauth
 cfg := tideauth.Config{
@@ -38,9 +41,15 @@ auth := tideauth.New(cfg)
 
 // Run migrations
 err = auth.Migrate(context.Background())
+if err != nil {
+	log.Fatalln("Error running migrations:", err)
+}
 
 // Create default routes exported by tideauth
 routes, err := auth.Routes()
+if err != nil {
+	log.Fatalln("Error setting up routes:", err)
+}
 
 // Handlers
 mux.Handle("/api/auth/", http.StripPrefix("/api/auth", routes))
@@ -49,14 +58,24 @@ mux.Handle("/api/auth/", http.StripPrefix("/api/auth", routes))
 mux.HandleFunc("GET /api/me", auth.Protected(meHandler))
 ```
 
-`Migrate` creates and maintains the user data tables (`users`,
-`oauth_accounts`, `passwords`, and `sessions`) in the Postgres database behind
-the pool. `Routes` returns a handler serving `POST /sign-up`, `POST /sign-in`,
-`GET /google/sign-in`, `GET /google/callback`, `GET /session`, and
-`POST /sign-out`; sign-up validates the email address and stores the password
-as a bcrypt hash. `Protected` wraps a handler with session validation: it
-checks the session cookie against the database, slides the session's expiry
-another 30 days, and passes the user's id along in the request context.
+## API
+
+- `New(cfg Config) *Auth` creates an `Auth` from the config. It does no I/O;
+  the pgx pool is created, owned, and closed by the caller.
+- `Migrate(ctx context.Context) error` applies the embedded SQL migrations,
+  creating and maintaining the user data tables: `users`, `oauth_accounts`,
+  `passwords`, and `sessions`. Safe to run on every startup.
+- `Routes() (http.Handler, error)` returns a handler serving `POST /sign-up`,
+  `POST /sign-in`, `GET /google/sign-in`, `GET /google/callback`,
+  `GET /session`, and `POST /sign-out`. Sign-up validates the email address
+  and stores the password as a bcrypt hash.
+- `Protected(next http.HandlerFunc) http.HandlerFunc` wraps a handler with
+  session validation: it checks the session cookie against the database,
+  slides the session's expiry another 30 days, and puts the user's id in the
+  request context. Requests without a valid session get a 401.
+- `UserIDFromContext(ctx context.Context) (string, bool)` reads the user id
+  that `Protected` stored in the request context; the bool reports whether it
+  was there.
 
 ## Development
 
@@ -76,7 +95,8 @@ make lint    # lint the package
 
 ```
 tideauth/
-├── tideauth.go       the package: Config, New, Migrate, Routes, Protected
+├── tideauth.go       the package: Config, New, Migrate, Routes, Protected,
+│                     and UserIDFromContext
 ├── cmd/              an example server that mounts the package
 └── internal/
     ├── auth/         Google OAuth2/OIDC, session handlers, and middleware
