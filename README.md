@@ -6,8 +6,9 @@ The threetides studio's authentication package.
 studio's services: OAuth2 and OIDC sign-in, sessions, and the user data tables
 behind them. A service imports the package, fills in a `Config`, and gets back
 its migrations, a set of `net/http` routes to mount, and middleware for
-protecting its own routes, with no auth code of its own. It currently supports Google sign-in, with more providers to come, and
-will eventually replace the built-in auth in multe.
+protecting its own routes, with no auth code of its own. It currently supports email and password sign-in and Google sign-in,
+with more providers to come, and will eventually replace the built-in auth in
+multe.
 
 ## Usage
 
@@ -46,8 +47,10 @@ mux.HandleFunc("GET /api/me", auth.Protected(meHandler))
 
 `Migrate` creates and maintains the user data tables (`users`,
 `oauth_accounts`, `passwords`, and `sessions`) in the Postgres database behind
-the pool. `Routes` returns a handler serving `GET /google/sign-in`,
-`GET /google/callback`, `GET /session`, and `POST /sign-out`. `Protected` wraps
+the pool. `Routes` returns a handler serving `POST /sign-up`, `POST /sign-in`,
+`GET /google/sign-in`, `GET /google/callback`, `GET /session`, and
+`POST /sign-out`; sign-up validates the email address and stores the password
+as a bcrypt hash. `Protected` wraps
 a handler with session validation: it checks the session cookie against the
 database, slides the session's expiry another 30 days, and passes the user's id
 along in the request context.
