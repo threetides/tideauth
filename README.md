@@ -7,8 +7,7 @@ studio's services: OAuth2 and OIDC sign-in, sessions, and the user data tables
 behind them. A service imports the package, fills in a `Config`, and gets back
 its migrations, a set of `net/http` routes to mount, and middleware for
 protecting its own routes, with no auth code of its own. It currently supports email and password sign-in and Google sign-in,
-with more providers to come, and will eventually replace the built-in auth in
-multe.
+with more providers to come.
 
 ## Usage
 
