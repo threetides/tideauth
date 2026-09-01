@@ -20,8 +20,10 @@ go get github.com/threetides/tideauth@latest
 Configure it, run its migrations, and mount its routes:
 
 ```go
+// Connect to db
 db, err := pgxpool.New(context.Background(), os.Getenv("DB_CONNECTION_STRING"))
-// ...
+
+// Create config for tideauth
 cfg := tideauth.Config{
 	DB:           db,
 	CookieDomain: "threetides.dev",
@@ -34,13 +36,16 @@ cfg := tideauth.Config{
 
 auth := tideauth.New(cfg)
 
+// Run migrations
 err = auth.Migrate(context.Background())
-// ...
+
+// Create default routes exported by tideauth
 routes, err := auth.Routes()
-// ...
+
+// Handlers
 mux.Handle("/api/auth/", http.StripPrefix("/api/auth", routes))
 
-// Protect the service's own routes with the session middleware
+// Protect your own routes with the session middleware
 mux.HandleFunc("GET /api/me", auth.Protected(meHandler))
 ```
 
