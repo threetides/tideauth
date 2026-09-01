@@ -89,14 +89,22 @@ Returns a handler serving the auth endpoints:
 
 ```
 POST /sign-up            create a user with email and password
+                         body: { "email", "name", "password" }
+
 POST /sign-in            sign in with email and password
+                         body: { "email", "password" }
+
 GET  /google/sign-in     redirect to Google's consent screen
+
 GET  /google/callback    complete the Google sign-in
+
 GET  /session            the signed-in user's profile
+
 POST /sign-out           end the session
 ```
 
-Sign-up validates the email address and stores the password as a bcrypt hash.
+Bodies are JSON and every field is a string. Sign-up validates the email
+address and stores the password as a bcrypt hash.
 
 ### Protected
 
