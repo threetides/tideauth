@@ -56,20 +56,22 @@ func main() {
 
 	auth := tideauth.New(cfg)
 
+	// Run migrations
 	err = auth.Migrate(context.Background())
 	if err != nil {
 		log.Fatalln("Error migrating:", err)
+	}
+
+	// Create default routes exported by tideauth
+	authRoutes, err := auth.Routes()
+	if err != nil {
+		log.Fatalln("Error setting up routes:", err)
 	}
 
 	// Health
 	mux.HandleFunc("GET /api/health", func(w http.ResponseWriter, r *http.Request) {
 		httpx.WriteJSON(w, http.StatusOK, "Healthy", nil)
 	})
-
-	authRoutes, err := auth.Routes()
-	if err != nil {
-		log.Fatalln("Error setting up routes:", err)
-	}
 
 	// Handlers
 	mux.Handle("/api/auth/", http.StripPrefix("/api/auth", authRoutes))
