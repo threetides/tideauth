@@ -248,7 +248,9 @@ func (cfg *GoogleCFG) GoogleCallback() http.HandlerFunc {
 
 		http.SetCookie(w, sessionCookie)
 
-		http.Redirect(w, r, os.Getenv("CORS_ORIGIN")+"/", http.StatusTemporaryRedirect)
+		redirectURL, _, _ := strings.Cut(os.Getenv("CORS_ORIGIN"), ",")
+
+		http.Redirect(w, r, redirectURL+"/", http.StatusTemporaryRedirect)
 	}
 }
 
