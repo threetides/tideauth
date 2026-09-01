@@ -3,6 +3,7 @@ package tideauth
 import (
 	"context"
 	"database/sql"
+	"embed"
 	"fmt"
 	"log"
 	"net/http"
@@ -10,6 +11,7 @@ import (
 	"github.com/golang-migrate/migrate/v4"
 	"github.com/golang-migrate/migrate/v4/database/postgres"
 	_ "github.com/golang-migrate/migrate/v4/source/file"
+	"github.com/golang-migrate/migrate/v4/source/iofs"
 	"github.com/jackc/pgx/v5/pgxpool"
 	_ "github.com/lib/pq"
 	"github.com/threetides/tideauth/internal/auth"
@@ -32,6 +34,9 @@ type Auth struct {
 	cfg Config
 }
 
+//go:embed internal/migrations/*.sql
+var migrationFiles embed.FS
+
 func New(cfg Config) *Auth {
 	return &Auth{db: cfg.DB, cfg: cfg}
 }
@@ -52,12 +57,15 @@ func (a *Auth) Migrate(ctx context.Context) error {
 		return fmt.Errorf("error creating postgres driver: %v", err)
 	}
 
-	m, err := migrate.NewWithDatabaseInstance(
-		"file://internal/migrations",
-		"postgres", driver)
-
+	// 2. Wrap the embedded folder using iofs
+	d, err := iofs.New(migrationFiles, "internal/migrations")
 	if err != nil {
-		return fmt.Errorf("error running migrate.NewWithDatabaseInstance(): %v", err)
+		return fmt.Errorf("error getting migration files: %v", err)
+	}
+
+	m, err := migrate.NewWithInstance("iofs", d, "postgres", driver)
+	if err != nil {
+		log.Fatal(err)
 	}
 	_ = m.Up()
 
