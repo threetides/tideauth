@@ -4,16 +4,16 @@ import (
 	"context"
 	"database/sql"
 	"embed"
+	"errors"
 	"fmt"
 	"log"
 	"net/http"
 
 	"github.com/golang-migrate/migrate/v4"
 	"github.com/golang-migrate/migrate/v4/database/postgres"
-	_ "github.com/golang-migrate/migrate/v4/source/file"
 	"github.com/golang-migrate/migrate/v4/source/iofs"
 	"github.com/jackc/pgx/v5/pgxpool"
-	_ "github.com/lib/pq"
+	_ "github.com/jackc/pgx/v5/stdlib"
 	"github.com/threetides/tideauth/internal/auth"
 )
 
@@ -42,7 +42,7 @@ func New(cfg Config) *Auth {
 }
 
 func (a *Auth) Migrate(ctx context.Context) error {
-	db, err := sql.Open("postgres", a.cfg.DB.Config().ConnString())
+	db, err := sql.Open("pgx", a.cfg.DB.Config().ConnString())
 	if err != nil {
 		return fmt.Errorf("error opening db connection: %v", err)
 	}
@@ -65,9 +65,11 @@ func (a *Auth) Migrate(ctx context.Context) error {
 
 	m, err := migrate.NewWithInstance("iofs", d, "postgres", driver)
 	if err != nil {
-		log.Fatal(err)
+		return fmt.Errorf("error creating m *migrate.Migrate: %v", err)
 	}
-	_ = m.Up()
+	if err := m.Up(); err != nil && !errors.Is(err, migrate.ErrNoChange) {
+		return fmt.Errorf("error migrating up: %v", err)
+	}
 
 	log.Println("Migrations completed")
 	return nil
