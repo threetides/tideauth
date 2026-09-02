@@ -51,7 +51,7 @@ func main() {
 	cfg := tideauth.Config{
 		RedirectOrigin: os.Getenv("REDIRECT_ORIGIN"),
 		DB:             db,
-		CookieDomain:   "threetides.dev",
+		CookieDomain:   os.Getenv("COOKIE_DOMAIN"),
 		SecureCookie:   os.Getenv("COOKIE_SECURE") == "true",
 		Google:         tideauth.Google{ClientID: os.Getenv("TEST_CLIENT_ID"), ClientSecret: os.Getenv("TEST_CLIENT_SECRET"), RedirectURL: fmt.Sprintf("%v/api/auth/google/callback", os.Getenv("REDIRECT_URL"))},
 	}
