@@ -28,8 +28,8 @@ if err != nil {
 
 // Create config for tideauth
 cfg := tideauth.Config{
-	RedirectOrigin: os.Getenv("REDIRECT_ORIGIN"),
 	DB:             db,
+	RedirectOrigin: os.Getenv("REDIRECT_ORIGIN"),
 	CookieDomain:   os.Getenv("COOKIE_DOMAIN"),
 	SecureCookie:   os.Getenv("COOKIE_SECURE") == "true",
 	Google: tideauth.Google{
