@@ -49,3 +49,10 @@ type fieldError struct {
 	Field string `json:"field"`
 	Error string `json:"error"`
 }
+
+type rErrors struct {
+	InternalServerError    string
+	Unauthorized           string
+	GoogleEmailNotVerified string
+	LocalEmailNotVerified  string
+}

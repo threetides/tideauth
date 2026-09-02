@@ -7,8 +7,10 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"log"
 	"net/http"
+	"net/url"
 	"os"
 	"regexp"
 	"strings"
@@ -24,6 +26,13 @@ var verifier = emailverifier.NewVerifier()
 var hasLower = regexp.MustCompile(`\p{Ll}`)
 var hasUpper = regexp.MustCompile(`\p{Lu}`)
 var hasDigit = regexp.MustCompile(`[0-9]`)
+
+var returnErrors = rErrors{
+	InternalServerError:    "internal_server_error",
+	Unauthorized:           "unauthorized",
+	GoogleEmailNotVerified: "google_email_not_verified",
+	LocalEmailNotVerified:  "local_email_not_verified",
+}
 
 func (Auth *AuthHandler) SignUp() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
@@ -161,12 +170,17 @@ func (cfg *GoogleCFG) GoogleSignIn() http.HandlerFunc {
 			httpx.WriteJSON(w, http.StatusInternalServerError, "Internal server error", nil)
 			return
 		}
-		state := base64.RawURLEncoding.EncodeToString(b)
+
+		token := base64.RawURLEncoding.EncodeToString(b)
+		returnError := base64.StdEncoding.EncodeToString([]byte(r.URL.Query().Get("return_error")))
+		returnSuccess := base64.StdEncoding.EncodeToString([]byte(r.URL.Query().Get("return_success")))
+
+		state := fmt.Sprintf("%s|%s|%s", token, returnError, returnSuccess)
 
 		// Set short lived httpOnlyCookie
 		cookie := http.Cookie{
 			Name:     "state",
-			Value:    state,
+			Value:    token,
 			Path:     "/",
 			Expires:  time.Now().Add(5 * time.Minute),
 			HttpOnly: true,
@@ -184,6 +198,7 @@ func (cfg *GoogleCFG) GoogleCallback() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		// Verify state and errors.
 		state := r.URL.Query().Get("state")
+		redirectURL, _, _ := strings.Cut(os.Getenv("CORS_ORIGIN"), ",")
 		cookie, err := r.Cookie("state")
 		if err != nil {
 			log.Println("Error retrieving cookie:", err)
@@ -191,8 +206,32 @@ func (cfg *GoogleCFG) GoogleCallback() http.HandlerFunc {
 			return
 		}
 
-		if state != cookie.Value {
-			httpx.WriteJSON(w, http.StatusUnauthorized, "Unauthorized", nil)
+		parts := strings.SplitN(state, "|", 3)
+		token := parts[0]
+
+		rawReturnError, err := base64.StdEncoding.DecodeString(parts[1])
+		if err != nil {
+			log.Println("Error decoding rawReturnError:", err)
+			httpx.WriteJSON(w, http.StatusInternalServerError, "Internal server error", nil)
+			return
+		}
+		rawReturnSuccess, err := base64.StdEncoding.DecodeString(parts[2])
+		if err != nil {
+			log.Println("Error decoding rawReturnSuccess:", err)
+			httpx.WriteJSON(w, http.StatusInternalServerError, "Internal server error", nil)
+			return
+		}
+
+		returnError := string(rawReturnError)
+		returnSuccess := string(rawReturnSuccess)
+
+		if token != cookie.Value {
+			redirect, err := generateRedirectURL(returnError, returnErrors.Unauthorized)
+			if err != nil {
+				httpx.WriteJSON(w, http.StatusInternalServerError, "Internal server error", nil)
+				return
+			}
+			http.Redirect(w, r, redirect.String(), http.StatusTemporaryRedirect)
 			return
 		}
 
@@ -210,7 +249,12 @@ func (cfg *GoogleCFG) GoogleCallback() http.HandlerFunc {
 		oauth2Token, err := cfg.Config.Exchange(r.Context(), r.URL.Query().Get("code"))
 		if err != nil {
 			log.Println("Error creating oauth2Token:", err)
-			httpx.WriteJSON(w, http.StatusInternalServerError, "Internal server error", nil)
+			redirect, err := generateRedirectURL(returnError, returnErrors.InternalServerError)
+			if err != nil {
+				httpx.WriteJSON(w, http.StatusInternalServerError, "Internal server error", nil)
+				return
+			}
+			http.Redirect(w, r, redirect.String(), http.StatusTemporaryRedirect)
 			return
 		}
 
@@ -218,7 +262,12 @@ func (cfg *GoogleCFG) GoogleCallback() http.HandlerFunc {
 		rawIDToken, ok := oauth2Token.Extra("id_token").(string)
 		if !ok {
 			log.Println("Error extracting rawIDToken:", err)
-			httpx.WriteJSON(w, http.StatusInternalServerError, "Internal server error", nil)
+			redirect, err := generateRedirectURL(returnError, returnErrors.InternalServerError)
+			if err != nil {
+				httpx.WriteJSON(w, http.StatusInternalServerError, "Internal server error", nil)
+				return
+			}
+			http.Redirect(w, r, redirect.String(), http.StatusTemporaryRedirect)
 			return
 		}
 
@@ -226,31 +275,92 @@ func (cfg *GoogleCFG) GoogleCallback() http.HandlerFunc {
 		idToken, err := cfg.IDTokenVerifier.Verify(r.Context(), rawIDToken)
 		if err != nil {
 			log.Println("Error parsing idToken payload:", err)
-			httpx.WriteJSON(w, http.StatusInternalServerError, "Internal server error", nil)
+			redirect, err := generateRedirectURL(returnError, returnErrors.InternalServerError)
+			if err != nil {
+				httpx.WriteJSON(w, http.StatusInternalServerError, "Internal server error", nil)
+				return
+			}
+			http.Redirect(w, r, redirect.String(), http.StatusTemporaryRedirect)
 			return
 		}
 
 		// Extract custom claims
 		var claims claims
 		if err := idToken.Claims(&claims); err != nil {
-			log.Println("Error extracting custom claims:", err)
-			httpx.WriteJSON(w, http.StatusInternalServerError, "Internal server error", nil)
+			log.Println("Error extracting claims:", err)
+			redirect, err := generateRedirectURL(returnError, returnErrors.InternalServerError)
+			if err != nil {
+				httpx.WriteJSON(w, http.StatusInternalServerError, "Internal server error", nil)
+				return
+			}
+			http.Redirect(w, r, redirect.String(), http.StatusTemporaryRedirect)
+			return
+		}
+
+		if claims.EmailVerified == false {
+			redirect, err := generateRedirectURL(returnError, returnErrors.GoogleEmailNotVerified)
+			if err != nil {
+				httpx.WriteJSON(w, http.StatusInternalServerError, "Internal server error", nil)
+				return
+			}
+			http.Redirect(w, r, redirect.String(), http.StatusTemporaryRedirect)
+			return
+		}
+
+		// Check for existing user
+		var user struct {
+			Email         string
+			EmailVerified bool
+		}
+		query := `SELECT email, email_verified FROM users WHERE email = ($1)`
+
+		err = cfg.DB.QueryRow(r.Context(), query, claims.Email).Scan(&user.Email, &user.EmailVerified)
+		if err != nil && !errors.Is(err, pgx.ErrNoRows) {
+			log.Println("Error querying users table:", err)
+			redirect, err := generateRedirectURL(returnError, returnErrors.InternalServerError)
+			if err != nil {
+				httpx.WriteJSON(w, http.StatusInternalServerError, "Internal server error", nil)
+				return
+			}
+			http.Redirect(w, r, redirect.String(), http.StatusTemporaryRedirect)
+			return
+		}
+
+		// User exists, but email is NOT verified
+		if user.Email != "" && user.EmailVerified == false {
+			redirect, err := generateRedirectURL(returnError, returnErrors.LocalEmailNotVerified)
+			if err != nil {
+				httpx.WriteJSON(w, http.StatusInternalServerError, "Internal server error", nil)
+				return
+			}
+			http.Redirect(w, r, redirect.String(), http.StatusTemporaryRedirect)
 			return
 		}
 
 		// Insert into db
 		sessionCookie, err := InsertGoogleData(r.Context(), cfg.DB, claims)
 		if err != nil {
-			log.Println("Error inserting user into db:", err)
-			httpx.WriteJSON(w, http.StatusInternalServerError, "Internal server error", nil)
+			log.Println("Error inserting into db:", err)
+			redirect, err := generateRedirectURL(returnError, returnErrors.InternalServerError)
+			if err != nil {
+				httpx.WriteJSON(w, http.StatusInternalServerError, "Internal server error", nil)
+				return
+			}
+			http.Redirect(w, r, redirect.String(), http.StatusTemporaryRedirect)
 			return
 		}
 
 		http.SetCookie(w, sessionCookie)
 
-		redirectURL, _, _ := strings.Cut(os.Getenv("CORS_ORIGIN"), ",")
+		u, err := url.Parse(redirectURL)
+		if err != nil {
+			log.Println("Error parsing redirectURL:", err)
+			httpx.WriteJSON(w, http.StatusInternalServerError, "Internal server error", nil)
+			return
+		}
+		u = u.JoinPath(returnSuccess)
 
-		http.Redirect(w, r, redirectURL+"/", http.StatusTemporaryRedirect)
+		http.Redirect(w, r, u.String(), http.StatusTemporaryRedirect)
 	}
 }
 
