@@ -30,7 +30,7 @@ if err != nil {
 cfg := tideauth.Config{
 	RedirectOrigin: os.Getenv("REDIRECT_ORIGIN"),
 	DB:             db,
-	CookieDomain:   "example.com",
+	CookieDomain:   os.Getenv("COOKIE_DOMAIN"),
 	SecureCookie:   os.Getenv("COOKIE_SECURE") == "true",
 	Google: tideauth.Google{
 		ClientID:     os.Getenv("GOOGLE_CLIENT_ID"),
@@ -174,8 +174,8 @@ reports whether it was there.
 `cmd/main.go` is an example server that mounts the package the way a consuming
 service would, with CORS, a health route, and a protected test route. It reads
 `DB_CONNECTION_STRING`, `CORS_ORIGIN`, `REDIRECT_ORIGIN`, `REDIRECT_URL`,
-`COOKIE_SECURE`, `TEST_CLIENT_ID`, and `TEST_CLIENT_SECRET` from a `.env` file
-(or the environment).
+`COOKIE_DOMAIN`, `COOKIE_SECURE`, `TEST_CLIENT_ID`, and `TEST_CLIENT_SECRET`
+from a `.env` file (or the environment).
 
 With Go, Postgres, and [golangci-lint](https://golangci-lint.run) installed:
 
