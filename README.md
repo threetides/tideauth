@@ -71,14 +71,13 @@ func New(cfg Config) *Auth
 Creates an `Auth` from the config. It does no I/O; the pgx pool is created,
 owned, and closed by the caller.
 
-```
-RedirectOrigin    the frontend origin the Google callback redirects back to
-DB                a pgx pool the caller creates, owns, and closes
-CookieDomain      the Domain attribute on every cookie tideauth sets; leave
-                  empty for a host-only cookie (what localhost needs)
-SecureCookie      mark every cookie tideauth sets as Secure; true behind https
-Google            client id, client secret, and the callback url
-```
+| Field            | Type            | Description                                                                                             |
+| ---------------- | --------------- | ------------------------------------------------------------------------------------------------------- |
+| `RedirectOrigin` | `string`        | The frontend origin the Google callback redirects back to.                                              |
+| `DB`             | `*pgxpool.Pool` | A pgx pool the caller creates, owns, and closes.                                                        |
+| `CookieDomain`   | `string`        | The `Domain` attribute on every cookie tideauth sets. Leave empty for a host-only cookie (localhost).   |
+| `SecureCookie`   | `bool`          | Marks every cookie tideauth sets as `Secure`. Use `true` behind https.                                  |
+| `Google`         | `Google`        | Client id, client secret, and the callback url.                                                         |
 
 ### Migrate
 
@@ -98,22 +97,14 @@ func (a *Auth) Routes() (http.Handler, error)
 
 Returns a handler serving the auth endpoints:
 
-```
-POST /sign-up            create a user with email and password
-                         body: { "email", "name", "password" }
-
-POST /sign-in            sign in with email and password
-                         body: { "email", "password" }
-
-GET  /google/sign-in     redirect to Google's consent screen
-                         query: return_success, return_error (both optional)
-
-GET  /google/callback    complete the Google sign-in, then redirect back
-
-GET  /session            the signed-in user's profile
-
-POST /sign-out           end the session
-```
+| Route                   | Description                                    | Input                                                    |
+| ----------------------- | ---------------------------------------------- | -------------------------------------------------------- |
+| `POST /sign-up`         | Create a user with email and password          | Body: `{ "email", "name", "password" }`                  |
+| `POST /sign-in`         | Sign in with email and password                | Body: `{ "email", "password" }`                          |
+| `GET /google/sign-in`   | Redirect to Google's consent screen            | Query: `return_success`, `return_error` (both optional)  |
+| `GET /google/callback`  | Complete the Google sign-in, then redirect back |                                                         |
+| `GET /session`          | The signed-in user's profile                   |                                                          |
+| `POST /sign-out`        | End the session                                |                                                          |
 
 Bodies are JSON and every field is a string. Sign-up validates the email
 address and stores the password as a bcrypt hash.
@@ -126,23 +117,19 @@ frontend; they ride along in the OAuth state and decide where
 `Config.RedirectOrigin`, and with a parameter omitted its redirect goes to the
 origin's root.
 
-```
-return_success           where to land after a successful sign-in
-                         redirect: <origin>/<return_success>
-
-return_error             where to land when the sign-in fails
-                         redirect: <origin>/<return_error>?error=<code>
-```
+| Parameter        | Redirects to                           | When                            |
+| ---------------- | -------------------------------------- | ------------------------------- |
+| `return_success` | `<origin>/<return_success>`            | The sign-in succeeded           |
+| `return_error`   | `<origin>/<return_error>?error=<code>` | The sign-in failed              |
 
 The `error` codes:
 
-```
-unauthorized                 the OAuth state did not match (expired or forged)
-internal_server_error        exchanging or verifying the Google token failed
-google_email_not_verified    Google reports the account's email as unverified
-local_email_not_verified     a password account with this email exists but
-                             has not verified it yet
-```
+| Code                        | Meaning                                                              |
+| --------------------------- | -------------------------------------------------------------------- |
+| `unauthorized`              | The OAuth state did not match (expired or forged)                    |
+| `internal_server_error`     | Exchanging or verifying the Google token failed                      |
+| `google_email_not_verified` | Google reports the account's email as unverified                     |
+| `local_email_not_verified`  | A password account with this email exists but has not verified it    |
 
 For example, a frontend served at `RedirectOrigin` would start the flow with:
 
