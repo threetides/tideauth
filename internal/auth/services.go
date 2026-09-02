@@ -9,7 +9,6 @@ import (
 	"errors"
 	"fmt"
 	"log"
-	"net/http"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -18,24 +17,24 @@ import (
 	"golang.org/x/crypto/bcrypt"
 )
 
+var ErrInternalServerError = errors.New("internal server error")
 var ErrEmailExists = errors.New("email already exists")
-var InvalidEmailOrPassword = errors.New("invalid email or password")
+var ErrInvalidEmailOrPassword = errors.New("invalid email or password")
 
-func InsertUserData(ctx context.Context, db *pgxpool.Pool, signUp signUp) (cookie *http.Cookie, error error) {
+func InsertUserData(ctx context.Context, db *pgxpool.Pool, signUp signUp, expiresAt time.Time) (token string, error error) {
 	b := make([]byte, 32)
 	_, err := rand.Read(b)
 	if err != nil {
-		return nil, fmt.Errorf("error reading byte: %v", err)
+		return "", fmt.Errorf("error reading byte: %v", err)
 	}
-	token := base64.RawURLEncoding.EncodeToString(b)
+	token = base64.RawURLEncoding.EncodeToString(b)
 	hash := sha256.Sum256([]byte(token))
 	tokenHash := hex.EncodeToString(hash[:])
-	expiresAt := time.Now().AddDate(0, 0, 30)
 
 	// Begin a transaction
 	tx, err := db.Begin(ctx)
 	if err != nil {
-		return nil, fmt.Errorf("error creating transaction: %v", err)
+		return "", fmt.Errorf("error creating transaction: %v", err)
 	}
 	defer func() {
 		if err := tx.Rollback(ctx); err != nil && !errors.Is(err, pgx.ErrTxClosed) {
@@ -53,13 +52,16 @@ func InsertUserData(ctx context.Context, db *pgxpool.Pool, signUp signUp) (cooki
 	if err != nil {
 		if pgErr, ok := errors.AsType[*pgconn.PgError](err); ok {
 			if pgErr.Code == "23505" {
-				return nil, fmt.Errorf("%w: %v", ErrEmailExists, err)
+				return "", fmt.Errorf("%w: %v", ErrEmailExists, err)
 			}
 		}
-		return nil, fmt.Errorf("error inserting signUp into users: %v", err)
+		return "", fmt.Errorf("error inserting signUp into users: %v", err)
 	}
 
 	bytes, err := bcrypt.GenerateFromPassword([]byte(signUp.Password), bcrypt.DefaultCost)
+	if err != nil {
+		return "", fmt.Errorf("%w: %v", ErrInternalServerError, err)
+	}
 	passwordHash := string(bytes)
 
 	// Insert into passwords table
@@ -68,7 +70,7 @@ func InsertUserData(ctx context.Context, db *pgxpool.Pool, signUp signUp) (cooki
 
 	_, err = tx.Exec(ctx, passwordsQuery, userID, passwordHash)
 	if err != nil {
-		return nil, fmt.Errorf("error inserting signUp into passwords: %v", err)
+		return "", fmt.Errorf("error inserting signUp into passwords: %v", err)
 	}
 
 	// Insert into sessions table
@@ -77,43 +79,32 @@ func InsertUserData(ctx context.Context, db *pgxpool.Pool, signUp signUp) (cooki
 
 	_, err = tx.Exec(ctx, sessionsQuery, userID, tokenHash, expiresAt)
 	if err != nil {
-		return nil, fmt.Errorf("error inserting claims into sessions: %v", err)
+		return "", fmt.Errorf("error inserting claims into sessions: %v", err)
 	}
 
 	// Commit if nothing wrong
 	err = tx.Commit(ctx)
 	if err != nil {
-		return nil, fmt.Errorf("error commiting transaction: %v", err)
+		return "", fmt.Errorf("error commiting transaction: %v", err)
 	}
 
-	cookie = &http.Cookie{
-		Name:     "session",
-		Value:    token, // raw token to browser
-		HttpOnly: true,
-		Secure:   true,
-		SameSite: http.SameSiteLaxMode,
-		Path:     "/",
-		Expires:  expiresAt,
-	}
-
-	return cookie, nil
+	return token, nil
 }
 
-func SignIn(ctx context.Context, db *pgxpool.Pool, signIn signIn) (cookie *http.Cookie, error error) {
+func SignIn(ctx context.Context, db *pgxpool.Pool, signIn signIn, expiresAt time.Time) (token string, error error) {
 	b := make([]byte, 32)
 	_, err := rand.Read(b)
 	if err != nil {
-		return nil, fmt.Errorf("error reading byte: %v", err)
+		return "", fmt.Errorf("error reading byte: %v", err)
 	}
-	token := base64.RawURLEncoding.EncodeToString(b)
+	token = base64.RawURLEncoding.EncodeToString(b)
 	hash := sha256.Sum256([]byte(token))
 	tokenHash := hex.EncodeToString(hash[:])
-	expiresAt := time.Now().AddDate(0, 0, 30)
 
 	// Begin a transaction
 	tx, err := db.Begin(ctx)
 	if err != nil {
-		return nil, fmt.Errorf("error creating transaction: %v", err)
+		return "", fmt.Errorf("error creating transaction: %v", err)
 	}
 	defer func() {
 		if err := tx.Rollback(ctx); err != nil && !errors.Is(err, pgx.ErrTxClosed) {
@@ -128,11 +119,11 @@ func SignIn(ctx context.Context, db *pgxpool.Pool, signIn signIn) (cookie *http.
 
 	err = db.QueryRow(ctx, userIDQuery, signIn.Email).Scan(&userID)
 	if err != nil && !errors.Is(err, pgx.ErrNoRows) {
-		return nil, fmt.Errorf("error quering users table: %v", err)
+		return "", fmt.Errorf("error quering users table: %v", err)
 	}
 
 	if userID == "" {
-		return nil, fmt.Errorf("%w: %v", InvalidEmailOrPassword, err)
+		return "", fmt.Errorf("%w: %v", ErrInvalidEmailOrPassword, err)
 	}
 
 	// Get password_hash and compare
@@ -142,12 +133,12 @@ func SignIn(ctx context.Context, db *pgxpool.Pool, signIn signIn) (cookie *http.
 
 	err = db.QueryRow(ctx, hashQuery, userID).Scan(&passwordHash)
 	if err != nil && !errors.Is(err, pgx.ErrNoRows) {
-		return nil, fmt.Errorf("error quering passwords table: %v", err)
+		return "", fmt.Errorf("error quering passwords table: %v", err)
 	}
 
 	err = bcrypt.CompareHashAndPassword([]byte(passwordHash), []byte(signIn.Password))
 	if err != nil {
-		return nil, fmt.Errorf("%w: %v", InvalidEmailOrPassword, err)
+		return "", fmt.Errorf("%w: %v", ErrInvalidEmailOrPassword, err)
 	}
 
 	// Insert into sessions table
@@ -156,43 +147,32 @@ func SignIn(ctx context.Context, db *pgxpool.Pool, signIn signIn) (cookie *http.
 
 	_, err = tx.Exec(ctx, sessionsQuery, userID, tokenHash, expiresAt)
 	if err != nil {
-		return nil, fmt.Errorf("error inserting claims into sessions: %v", err)
+		return "", fmt.Errorf("error inserting claims into sessions: %v", err)
 	}
 
 	// Commit if nothing wrong
 	err = tx.Commit(ctx)
 	if err != nil {
-		return nil, fmt.Errorf("error commiting transaction: %v", err)
+		return "", fmt.Errorf("error commiting transaction: %v", err)
 	}
 
-	cookie = &http.Cookie{
-		Name:     "session",
-		Value:    token, // raw token to browser
-		HttpOnly: true,
-		Secure:   true,
-		SameSite: http.SameSiteLaxMode,
-		Path:     "/",
-		Expires:  expiresAt,
-	}
-
-	return cookie, nil
+	return token, nil
 }
 
-func InsertGoogleData(ctx context.Context, db *pgxpool.Pool, claims claims) (cookie *http.Cookie, error error) {
+func InsertGoogleData(ctx context.Context, db *pgxpool.Pool, claims claims, expiresAt time.Time) (token string, error error) {
 	b := make([]byte, 32)
 	_, err := rand.Read(b)
 	if err != nil {
-		return nil, fmt.Errorf("error reading byte: %v", err)
+		return "", fmt.Errorf("error reading byte: %v", err)
 	}
-	token := base64.RawURLEncoding.EncodeToString(b)
+	token = base64.RawURLEncoding.EncodeToString(b)
 	hash := sha256.Sum256([]byte(token))
 	tokenHash := hex.EncodeToString(hash[:])
-	expiresAt := time.Now().AddDate(0, 0, 30)
 
 	// Begin a transaction
 	tx, err := db.Begin(ctx)
 	if err != nil {
-		return nil, fmt.Errorf("error creating transaction: %v", err)
+		return "", fmt.Errorf("error creating transaction: %v", err)
 	}
 	defer func() {
 		if err := tx.Rollback(ctx); err != nil && !errors.Is(err, pgx.ErrTxClosed) {
@@ -210,7 +190,7 @@ func InsertGoogleData(ctx context.Context, db *pgxpool.Pool, claims claims) (coo
 
 	err = tx.QueryRow(ctx, usersQuery, claims.Name, claims.Email, claims.EmailVerified).Scan(&userID)
 	if err != nil {
-		return nil, fmt.Errorf("error inserting claims into users: %v", err)
+		return "", fmt.Errorf("error inserting claims into users: %v", err)
 	}
 
 	// Insert into oauth_accounts table
@@ -220,7 +200,7 @@ func InsertGoogleData(ctx context.Context, db *pgxpool.Pool, claims claims) (coo
 
 	_, err = tx.Exec(ctx, oauthAccountsQuery, userID, "google", claims.Sub)
 	if err != nil {
-		return nil, fmt.Errorf("error inserting claims into oauth_accounts: %v", err)
+		return "", fmt.Errorf("error inserting claims into oauth_accounts: %v", err)
 	}
 
 	// Insert into sessions table
@@ -229,24 +209,14 @@ func InsertGoogleData(ctx context.Context, db *pgxpool.Pool, claims claims) (coo
 
 	_, err = tx.Exec(ctx, sessionsQuery, userID, tokenHash, expiresAt)
 	if err != nil {
-		return nil, fmt.Errorf("error inserting claims into sessions: %v", err)
+		return "", fmt.Errorf("error inserting claims into sessions: %v", err)
 	}
 
 	// Commit if nothing wrong
 	err = tx.Commit(ctx)
 	if err != nil {
-		return nil, fmt.Errorf("error commiting transaction: %v", err)
+		return "", fmt.Errorf("error commiting transaction: %v", err)
 	}
 
-	cookie = &http.Cookie{
-		Name:     "session",
-		Value:    token, // raw token to browser
-		HttpOnly: true,
-		Secure:   true,
-		SameSite: http.SameSiteLaxMode,
-		Path:     "/",
-		Expires:  expiresAt,
-	}
-
-	return cookie, nil
+	return token, nil
 }

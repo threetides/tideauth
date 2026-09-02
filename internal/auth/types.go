@@ -28,13 +28,18 @@ type signIn struct {
 }
 
 type GoogleCFG struct {
+	RedirectOrigin  string
+	CookieDomain    string
+	SecureCookie    bool
 	Config          oauth2.Config
 	IDTokenVerifier *oidc.IDTokenVerifier
 	DB              *pgxpool.Pool
 }
 
 type AuthHandler struct {
-	DB *pgxpool.Pool
+	CookieDomain string
+	SecureCookie bool
+	DB           *pgxpool.Pool
 }
 
 type User struct {

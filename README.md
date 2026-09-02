@@ -28,8 +28,10 @@ if err != nil {
 
 // Create config for tideauth
 cfg := tideauth.Config{
-	DB:           db,
-	CookieDomain: "example.com",
+	RedirectOrigin: os.Getenv("REDIRECT_ORIGIN"),
+	DB:             db,
+	CookieDomain:   "example.com",
+	SecureCookie:   os.Getenv("COOKIE_SECURE") == "true",
 	Google: tideauth.Google{
 		ClientID:     os.Getenv("GOOGLE_CLIENT_ID"),
 		ClientSecret: os.Getenv("GOOGLE_CLIENT_SECRET"),
@@ -69,6 +71,15 @@ func New(cfg Config) *Auth
 Creates an `Auth` from the config. It does no I/O; the pgx pool is created,
 owned, and closed by the caller.
 
+```
+RedirectOrigin    the frontend origin the Google callback redirects back to
+DB                a pgx pool the caller creates, owns, and closes
+CookieDomain      the Domain attribute on every cookie tideauth sets; leave
+                  empty for a host-only cookie (what localhost needs)
+SecureCookie      mark every cookie tideauth sets as Secure; true behind https
+Google            client id, client secret, and the callback url
+```
+
 ### Migrate
 
 ```go
@@ -95,8 +106,9 @@ POST /sign-in            sign in with email and password
                          body: { "email", "password" }
 
 GET  /google/sign-in     redirect to Google's consent screen
+                         query: return_success, return_error (both optional)
 
-GET  /google/callback    complete the Google sign-in
+GET  /google/callback    complete the Google sign-in, then redirect back
 
 GET  /session            the signed-in user's profile
 
@@ -105,6 +117,38 @@ POST /sign-out           end the session
 
 Bodies are JSON and every field is a string. Sign-up validates the email
 address and stores the password as a bcrypt hash.
+
+#### Google redirects
+
+`/google/sign-in` takes two optional query parameters. Both are paths on your
+frontend; they ride along in the OAuth state and decide where
+`/google/callback` sends the browser once Google returns. The base is
+`Config.RedirectOrigin`, and with a parameter omitted its redirect goes to the
+origin's root.
+
+```
+return_success           where to land after a successful sign-in
+                         redirect: <origin>/<return_success>
+
+return_error             where to land when the sign-in fails
+                         redirect: <origin>/<return_error>?error=<code>
+```
+
+The `error` codes:
+
+```
+unauthorized                 the OAuth state did not match (expired or forged)
+internal_server_error        exchanging or verifying the Google token failed
+google_email_not_verified    Google reports the account's email as unverified
+local_email_not_verified     a password account with this email exists but
+                             has not verified it yet
+```
+
+For example, a frontend served at `RedirectOrigin` would start the flow with:
+
+```
+GET /api/auth/google/sign-in?return_success=/dashboard&return_error=/sign-in
+```
 
 ### Protected
 
@@ -129,8 +173,9 @@ reports whether it was there.
 
 `cmd/main.go` is an example server that mounts the package the way a consuming
 service would, with CORS, a health route, and a protected test route. It reads
-`DB_CONNECTION_STRING`, `CORS_ORIGIN`, `REDIRECT_URL`, `TEST_CLIENT_ID`, and
-`TEST_CLIENT_SECRET` from a `.env` file (or the environment).
+`DB_CONNECTION_STRING`, `CORS_ORIGIN`, `REDIRECT_ORIGIN`, `REDIRECT_URL`,
+`COOKIE_SECURE`, `TEST_CLIENT_ID`, and `TEST_CLIENT_SECRET` from a `.env` file
+(or the environment).
 
 With Go, Postgres, and [golangci-lint](https://golangci-lint.run) installed:
 

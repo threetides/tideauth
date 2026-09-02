@@ -24,9 +24,11 @@ type Google struct {
 }
 
 type Config struct {
-	DB           *pgxpool.Pool
-	CookieDomain string
-	Google       Google
+	RedirectOrigin string
+	DB             *pgxpool.Pool
+	CookieDomain   string
+	SecureCookie   bool
+	Google         Google
 }
 
 type Auth struct {
@@ -92,8 +94,8 @@ func (a *Auth) Routes() (http.Handler, error) {
 		return nil, fmt.Errorf("error configuring Google: %v", err)
 	}
 
-	googleHandler := &auth.GoogleCFG{Config: googleCFG.Config, IDTokenVerifier: googleCFG.IDTokenVerifier, DB: a.db}
-	authHandler := &auth.AuthHandler{DB: a.db}
+	googleHandler := &auth.GoogleCFG{SecureCookie: a.cfg.SecureCookie, CookieDomain: a.cfg.CookieDomain, RedirectOrigin: a.cfg.RedirectOrigin, Config: googleCFG.Config, IDTokenVerifier: googleCFG.IDTokenVerifier, DB: a.db}
+	authHandler := &auth.AuthHandler{DB: a.db, CookieDomain: a.cfg.CookieDomain, SecureCookie: a.cfg.SecureCookie}
 
 	mux.HandleFunc("POST /sign-up", authHandler.SignUp())
 	mux.HandleFunc("POST /sign-in", authHandler.SignIn())

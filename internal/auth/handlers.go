@@ -10,8 +10,6 @@ import (
 	"fmt"
 	"log"
 	"net/http"
-	"net/url"
-	"os"
 	"regexp"
 	"strings"
 	"time"
@@ -90,11 +88,13 @@ func (Auth *AuthHandler) SignUp() http.HandlerFunc {
 			return
 		}
 
-		sessionCookie, err := InsertUserData(r.Context(), Auth.DB, signUp{
+		expiresAt := time.Now().AddDate(0, 0, 30)
+		token, err := InsertUserData(r.Context(), Auth.DB, signUp{
 			Email:    email,
 			Name:     name,
 			Password: password,
-		})
+		}, expiresAt)
+
 		if err != nil {
 			if errors.Is(err, ErrEmailExists) {
 				httpx.WriteJSON(w, http.StatusConflict, "An account with this email is already registered", nil)
@@ -106,7 +106,16 @@ func (Auth *AuthHandler) SignUp() http.HandlerFunc {
 			return
 		}
 
-		http.SetCookie(w, sessionCookie)
+		http.SetCookie(w, &http.Cookie{
+			Name:     "session",
+			Domain:   Auth.CookieDomain,
+			Value:    token, // raw token to browser
+			HttpOnly: true,
+			Secure:   Auth.SecureCookie,
+			SameSite: http.SameSiteLaxMode,
+			Path:     "/",
+			Expires:  expiresAt,
+		})
 
 		httpx.WriteJSON(w, http.StatusCreated, "Signed up", nil)
 	}
@@ -139,12 +148,14 @@ func (Auth *AuthHandler) SignIn() http.HandlerFunc {
 			return
 		}
 
-		sessionCookie, err := SignIn(r.Context(), Auth.DB, signIn{
+		expiresAt := time.Now().AddDate(0, 0, 30)
+		token, err := SignIn(r.Context(), Auth.DB, signIn{
 			Email:    email,
 			Password: password,
-		})
+		}, expiresAt)
+
 		if err != nil {
-			if errors.Is(err, InvalidEmailOrPassword) {
+			if errors.Is(err, ErrInvalidEmailOrPassword) {
 				httpx.WriteJSON(w, http.StatusConflict, "Invalid email or password", nil)
 				return
 			}
@@ -154,7 +165,16 @@ func (Auth *AuthHandler) SignIn() http.HandlerFunc {
 			return
 		}
 
-		http.SetCookie(w, sessionCookie)
+		http.SetCookie(w, &http.Cookie{
+			Name:     "session",
+			Domain:   Auth.CookieDomain,
+			Value:    token, // raw token to browser
+			HttpOnly: true,
+			Secure:   Auth.SecureCookie,
+			SameSite: http.SameSiteLaxMode,
+			Path:     "/",
+			Expires:  expiresAt,
+		})
 
 		httpx.WriteJSON(w, http.StatusOK, "Signed in", nil)
 	}
@@ -180,11 +200,12 @@ func (cfg *GoogleCFG) GoogleSignIn() http.HandlerFunc {
 		// Set short lived httpOnlyCookie
 		cookie := http.Cookie{
 			Name:     "state",
+			Domain:   cfg.CookieDomain,
 			Value:    token,
 			Path:     "/",
 			Expires:  time.Now().Add(5 * time.Minute),
 			HttpOnly: true,
-			Secure:   os.Getenv("COOKIE_SECURE") == "true",
+			Secure:   cfg.SecureCookie,
 			SameSite: http.SameSiteLaxMode,
 		}
 		http.SetCookie(w, &cookie)
@@ -198,7 +219,6 @@ func (cfg *GoogleCFG) GoogleCallback() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		// Verify state and errors.
 		state := r.URL.Query().Get("state")
-		redirectURL, _, _ := strings.Cut(os.Getenv("CORS_ORIGIN"), ",")
 		cookie, err := r.Cookie("state")
 		if err != nil {
 			log.Println("Error retrieving cookie:", err)
@@ -226,7 +246,7 @@ func (cfg *GoogleCFG) GoogleCallback() http.HandlerFunc {
 		returnSuccess := string(rawReturnSuccess)
 
 		if token != cookie.Value {
-			redirect, err := generateRedirectURL(returnError, returnErrors.Unauthorized)
+			redirect, err := generateRedirectURL(cfg.RedirectOrigin, returnError, returnErrors.Unauthorized)
 			if err != nil {
 				httpx.WriteJSON(w, http.StatusInternalServerError, "Internal server error", nil)
 				return
@@ -238,6 +258,7 @@ func (cfg *GoogleCFG) GoogleCallback() http.HandlerFunc {
 		// Clear cookie
 		http.SetCookie(w, &http.Cookie{
 			Name:     "state",
+			Domain:   cfg.CookieDomain,
 			Value:    "",
 			Path:     "/",
 			MaxAge:   -1,
@@ -249,7 +270,7 @@ func (cfg *GoogleCFG) GoogleCallback() http.HandlerFunc {
 		oauth2Token, err := cfg.Config.Exchange(r.Context(), r.URL.Query().Get("code"))
 		if err != nil {
 			log.Println("Error creating oauth2Token:", err)
-			redirect, err := generateRedirectURL(returnError, returnErrors.InternalServerError)
+			redirect, err := generateRedirectURL(cfg.RedirectOrigin, returnError, returnErrors.InternalServerError)
 			if err != nil {
 				httpx.WriteJSON(w, http.StatusInternalServerError, "Internal server error", nil)
 				return
@@ -262,7 +283,7 @@ func (cfg *GoogleCFG) GoogleCallback() http.HandlerFunc {
 		rawIDToken, ok := oauth2Token.Extra("id_token").(string)
 		if !ok {
 			log.Println("Error extracting rawIDToken:", err)
-			redirect, err := generateRedirectURL(returnError, returnErrors.InternalServerError)
+			redirect, err := generateRedirectURL(cfg.RedirectOrigin, returnError, returnErrors.InternalServerError)
 			if err != nil {
 				httpx.WriteJSON(w, http.StatusInternalServerError, "Internal server error", nil)
 				return
@@ -275,7 +296,7 @@ func (cfg *GoogleCFG) GoogleCallback() http.HandlerFunc {
 		idToken, err := cfg.IDTokenVerifier.Verify(r.Context(), rawIDToken)
 		if err != nil {
 			log.Println("Error parsing idToken payload:", err)
-			redirect, err := generateRedirectURL(returnError, returnErrors.InternalServerError)
+			redirect, err := generateRedirectURL(cfg.RedirectOrigin, returnError, returnErrors.InternalServerError)
 			if err != nil {
 				httpx.WriteJSON(w, http.StatusInternalServerError, "Internal server error", nil)
 				return
@@ -288,7 +309,7 @@ func (cfg *GoogleCFG) GoogleCallback() http.HandlerFunc {
 		var claims claims
 		if err := idToken.Claims(&claims); err != nil {
 			log.Println("Error extracting claims:", err)
-			redirect, err := generateRedirectURL(returnError, returnErrors.InternalServerError)
+			redirect, err := generateRedirectURL(cfg.RedirectOrigin, returnError, returnErrors.InternalServerError)
 			if err != nil {
 				httpx.WriteJSON(w, http.StatusInternalServerError, "Internal server error", nil)
 				return
@@ -297,8 +318,8 @@ func (cfg *GoogleCFG) GoogleCallback() http.HandlerFunc {
 			return
 		}
 
-		if claims.EmailVerified == false {
-			redirect, err := generateRedirectURL(returnError, returnErrors.GoogleEmailNotVerified)
+		if !claims.EmailVerified {
+			redirect, err := generateRedirectURL(cfg.RedirectOrigin, returnError, returnErrors.GoogleEmailNotVerified)
 			if err != nil {
 				httpx.WriteJSON(w, http.StatusInternalServerError, "Internal server error", nil)
 				return
@@ -317,7 +338,7 @@ func (cfg *GoogleCFG) GoogleCallback() http.HandlerFunc {
 		err = cfg.DB.QueryRow(r.Context(), query, claims.Email).Scan(&user.Email, &user.EmailVerified)
 		if err != nil && !errors.Is(err, pgx.ErrNoRows) {
 			log.Println("Error querying users table:", err)
-			redirect, err := generateRedirectURL(returnError, returnErrors.InternalServerError)
+			redirect, err := generateRedirectURL(cfg.RedirectOrigin, returnError, returnErrors.InternalServerError)
 			if err != nil {
 				httpx.WriteJSON(w, http.StatusInternalServerError, "Internal server error", nil)
 				return
@@ -327,8 +348,8 @@ func (cfg *GoogleCFG) GoogleCallback() http.HandlerFunc {
 		}
 
 		// User exists, but email is NOT verified
-		if user.Email != "" && user.EmailVerified == false {
-			redirect, err := generateRedirectURL(returnError, returnErrors.LocalEmailNotVerified)
+		if user.Email != "" && !user.EmailVerified {
+			redirect, err := generateRedirectURL(cfg.RedirectOrigin, returnError, returnErrors.LocalEmailNotVerified)
 			if err != nil {
 				httpx.WriteJSON(w, http.StatusInternalServerError, "Internal server error", nil)
 				return
@@ -338,10 +359,11 @@ func (cfg *GoogleCFG) GoogleCallback() http.HandlerFunc {
 		}
 
 		// Insert into db
-		sessionCookie, err := InsertGoogleData(r.Context(), cfg.DB, claims)
+		expiresAt := time.Now().AddDate(0, 0, 30)
+		sessionToken, err := InsertGoogleData(r.Context(), cfg.DB, claims, expiresAt)
 		if err != nil {
 			log.Println("Error inserting into db:", err)
-			redirect, err := generateRedirectURL(returnError, returnErrors.InternalServerError)
+			redirect, err := generateRedirectURL(cfg.RedirectOrigin, returnError, returnErrors.InternalServerError)
 			if err != nil {
 				httpx.WriteJSON(w, http.StatusInternalServerError, "Internal server error", nil)
 				return
@@ -350,17 +372,24 @@ func (cfg *GoogleCFG) GoogleCallback() http.HandlerFunc {
 			return
 		}
 
-		http.SetCookie(w, sessionCookie)
+		http.SetCookie(w, &http.Cookie{
+			Name:     "session",
+			Domain:   cfg.CookieDomain,
+			Value:    sessionToken, // raw token to browser
+			HttpOnly: true,
+			Secure:   cfg.SecureCookie,
+			SameSite: http.SameSiteLaxMode,
+			Path:     "/",
+			Expires:  expiresAt,
+		})
 
-		u, err := url.Parse(redirectURL)
+		redirect, err := generateRedirectURL(cfg.RedirectOrigin, returnSuccess, "")
 		if err != nil {
-			log.Println("Error parsing redirectURL:", err)
 			httpx.WriteJSON(w, http.StatusInternalServerError, "Internal server error", nil)
 			return
 		}
-		u = u.JoinPath(returnSuccess)
 
-		http.Redirect(w, r, u.String(), http.StatusTemporaryRedirect)
+		http.Redirect(w, r, redirect.String(), http.StatusTemporaryRedirect)
 	}
 }
 
@@ -431,6 +460,7 @@ func (Auth *AuthHandler) SignOut() http.HandlerFunc {
 		// Clear cookie
 		http.SetCookie(w, &http.Cookie{
 			Name:     "session",
+			Domain:   Auth.CookieDomain,
 			Value:    "",
 			Path:     "/",
 			MaxAge:   -1,
