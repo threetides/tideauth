@@ -24,7 +24,7 @@ var migrationFS embed.FS
 
 func (a *Auth) Migrate() error {
 	// * Create a source driver from the embedded filesystem
-	sourceDriver, err := iofs.New(migrationFS, "migrations")
+	sourceDriver, err := iofs.New(migrationFS, "internal/migrations")
 	if err != nil {
 		return fmt.Errorf("failed to create source driver: %w", err)
 	}
