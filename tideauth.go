@@ -53,7 +53,7 @@ func (a *Auth) Migrate() error {
 	}
 
 	s.Stop()
-	log.Println("migrations run successfully")
+	log.Println("migrations ran successfully")
 
 	return nil
 }
