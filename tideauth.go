@@ -27,7 +27,7 @@ var migrationFS embed.FS
 
 func (a *Auth) Migrate() error {
 	s := spinner.New(spinner.CharSets[14], 100*time.Millisecond)
-	s.Suffix = "running migrations"
+	s.Suffix = " running migrations"
 	s.Color("blue")
 	s.Start()
 
