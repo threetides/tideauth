@@ -5,6 +5,7 @@ import (
 	_ "embed"
 	"fmt"
 	"log"
+	"os"
 	"time"
 
 	"github.com/briandowns/spinner"
@@ -26,7 +27,8 @@ type Auth struct {
 var migrationFS embed.FS
 
 func (a *Auth) Migrate() error {
-	s := spinner.New(spinner.CharSets[14], 100*time.Millisecond)
+	spinnerLogger := log.New(os.Stderr, "", 0)
+	s := spinner.New(spinner.CharSets[14], 100*time.Millisecond, spinner.WithWriter(spinnerLogger.Writer()))
 	s.Suffix = " running migrations"
 	s.Color("blue")
 	s.Start()
