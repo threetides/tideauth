@@ -1,18 +1,17 @@
 package tideauth
 
 import (
+	"database/sql"
 	"embed"
 	_ "embed"
 	"fmt"
 	"log"
 
-	"github.com/jackc/pgx/v5/pgxpool"
-	"github.com/jackc/pgx/v5/stdlib"
 	"github.com/pressly/goose/v3"
 )
 
 type Config struct {
-	DBPool *pgxpool.Pool
+	DBurl string
 }
 
 type Auth struct {
@@ -24,7 +23,7 @@ var migrationFS embed.FS
 
 func (a *Auth) Migrate() error {
 	// Convert *pgxpool.Pool to *sql.DB
-	db := stdlib.OpenDBFromPool(a.Config.DBPool)
+	db, err := sql.Open("postgres", a.Config.DBurl)
 	defer func() {
 		if err := db.Close(); err != nil {
 			log.Println("error closing db connection")
@@ -38,7 +37,7 @@ func (a *Auth) Migrate() error {
 	goose.SetBaseFS(migrationFS)
 
 	// Run up migrations from your embedded files or directory
-	err := goose.Up(db, "internal/migrations")
+	err = goose.Up(db, "internal/migrations")
 	if err != nil {
 		return fmt.Errorf("error running migrations: %w", err)
 	}
