@@ -4,6 +4,7 @@ import (
 	"embed"
 	_ "embed"
 	"fmt"
+	"log"
 
 	"github.com/golang-migrate/migrate/v4"
 	_ "github.com/golang-migrate/migrate/v4/database/postgres"
@@ -43,6 +44,7 @@ func (a *Auth) Migrate() error {
 	if err := m.Up(); err != nil && err != migrate.ErrNoChange {
 		return fmt.Errorf("failed to run up migrations: %w", err)
 	}
+	log.Println("migrations run successfully")
 
 	return nil
 }
