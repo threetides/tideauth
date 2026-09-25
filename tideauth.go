@@ -38,7 +38,7 @@ func (a *Auth) Migrate() error {
 	goose.SetBaseFS(migrationFS)
 
 	// Run up migrations from your embedded files or directory
-	err := goose.Up(db, "migrations")
+	err := goose.Up(db, "internal/migrations")
 	if err != nil {
 		return fmt.Errorf("error running migrations: %w", err)
 	}
