@@ -5,7 +5,9 @@ import (
 	_ "embed"
 	"fmt"
 	"log"
+	"time"
 
+	"github.com/briandowns/spinner"
 	"github.com/golang-migrate/migrate/v4"
 	_ "github.com/golang-migrate/migrate/v4/database/postgres"
 	"github.com/golang-migrate/migrate/v4/source/iofs"
@@ -24,6 +26,11 @@ type Auth struct {
 var migrationFS embed.FS
 
 func (a *Auth) Migrate() error {
+	s := spinner.New(spinner.CharSets[14], 100*time.Millisecond)
+	s.Suffix = "running migrations"
+	s.Color("blue")
+	s.Start()
+
 	// * Create a source driver from the embedded filesystem
 	sourceDriver, err := iofs.New(migrationFS, "internal/migrations")
 	if err != nil {
@@ -44,6 +51,8 @@ func (a *Auth) Migrate() error {
 	if err := m.Up(); err != nil && err != migrate.ErrNoChange {
 		return fmt.Errorf("failed to run up migrations: %w", err)
 	}
+
+	s.Stop()
 	log.Println("migrations run successfully")
 
 	return nil
