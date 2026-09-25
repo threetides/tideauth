@@ -24,7 +24,7 @@ var migrationFS embed.FS
 
 func (a *Auth) Migrate() error {
 	// Convert *pgxpool.Pool to *sql.DB
-	db, err := sql.Open("postgres", a.Config.DBurl)
+	db, err := sql.Open("pgx", a.Config.DBurl)
 	if err != nil {
 		return fmt.Errorf("error opening sql connection: %w", err)
 	}
