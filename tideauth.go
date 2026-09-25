@@ -1,14 +1,14 @@
 package tideauth
 
 import (
-	"database/sql"
 	"embed"
 	_ "embed"
 	"fmt"
-	"log"
 
+	"github.com/golang-migrate/migrate/v4"
+	_ "github.com/golang-migrate/migrate/v4/database/postgres"
+	"github.com/golang-migrate/migrate/v4/source/iofs"
 	_ "github.com/jackc/pgx/v5/stdlib"
-	"github.com/pressly/goose/v3"
 )
 
 type Config struct {
@@ -23,28 +23,27 @@ type Auth struct {
 var migrationFS embed.FS
 
 func (a *Auth) Migrate() error {
-	// Convert *pgxpool.Pool to *sql.DB
-	db, err := sql.Open("pgx", a.Config.DBurl)
+	// * Create a source driver from the embedded filesystem
+	sourceDriver, err := iofs.New(migrationFS, "migrations")
 	if err != nil {
-		return fmt.Errorf("error opening sql connection: %w", err)
-	}
-	defer func() {
-		if err := db.Close(); err != nil {
-			log.Println("error closing db connection")
-		}
-	}()
-
-	if err := goose.SetDialect("postgres"); err != nil {
-		return fmt.Errorf("error setting dialect: %w", err)
+		return fmt.Errorf("failed to create source driver: %w", err)
 	}
 
-	goose.SetBaseFS(migrationFS)
-
-	// Run up migrations from your embedded files or directory
-	err = goose.Up(db, "internal/migrations")
+	// * Create a new Migrate instance
+	m, err := migrate.NewWithSourceInstance(
+		"file://internal/migrations",
+		sourceDriver,
+		a.Config.DBurl,
+	)
 	if err != nil {
-		return fmt.Errorf("error running migrations: %w", err)
+		return fmt.Errorf("failed to initialize migration: %w", err)
 	}
+
+	// * Run all up migrations
+	if err := m.Up(); err != nil && err != migrate.ErrNoChange {
+		return fmt.Errorf("failed to run up migrations: %w", err)
+	}
+
 	return nil
 }
 

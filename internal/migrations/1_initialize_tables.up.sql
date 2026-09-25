@@ -1,4 +1,6 @@
--- +goose Up
+
+BEGIN;
+
 -- Extensions
 CREATE EXTENSION IF NOT EXISTS pg_uuidv7;
 CREATE EXTENSION IF NOT EXISTS citext;
@@ -33,7 +35,6 @@ CREATE TABLE sessions (
 CREATE INDEX idx_sessions_user_id ON sessions (user_id);
 
 -- Functions
--- +goose StatementBegin
 CREATE OR REPLACE FUNCTION update_updated_at_column()
 RETURNS TRIGGER AS $$
 BEGIN
@@ -41,7 +42,6 @@ BEGIN
   RETURN NEW;
 END;
 $$ LANGUAGE plpgsql;
--- +goose StatementEnd
 
 -- Triggers
 CREATE TRIGGER update_users_updated_at
@@ -58,3 +58,5 @@ CREATE TRIGGER update_sessions_updated_at
 BEFORE UPDATE ON sessions
 FOR EACH ROW
 EXECUTE FUNCTION update_updated_at_column();
+
+COMMIT;
