@@ -3,12 +3,12 @@ module github.com/threetides/tideauth
 go 1.27.0
 
 require (
+	github.com/briandowns/spinner v1.23.2
 	github.com/golang-migrate/migrate/v4 v4.20.1
 	github.com/jackc/pgx/v5 v5.11.0
 )
 
 require (
-	github.com/briandowns/spinner v1.23.2 // indirect
 	github.com/docker/go-connections v0.8.1 // indirect
 	github.com/fatih/color v1.7.0 // indirect
 	github.com/jackc/pgpassfile v1.0.0 // indirect
