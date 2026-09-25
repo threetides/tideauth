@@ -7,7 +7,7 @@ import (
 	"fmt"
 	"log"
 
-	_ "github.com/jackc/pgx/v5"
+	_ "github.com/jackc/pgx/v5/stdlib"
 	"github.com/pressly/goose/v3"
 )
 
