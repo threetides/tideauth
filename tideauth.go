@@ -30,6 +30,9 @@ func (a *Auth) Migrate() error {
 		}
 	}()
 
+	fmt.Println(a.Config.DBurl)
+	fmt.Println(db)
+
 	if err := goose.SetDialect("postgres"); err != nil {
 		return fmt.Errorf("error setting dialect: %w", err)
 	}
