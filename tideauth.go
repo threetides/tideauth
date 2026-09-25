@@ -14,6 +14,8 @@ func (a *Auth) Migrate() {
 	log.Println("Connection string is:", a.Config.DBConn)
 }
 
-func (a *Auth) New(cfg Config) {
-	a.Config = cfg
+func New(cfg Config) Auth {
+	return Auth{
+		Config: cfg,
+	}
 }
