@@ -6,7 +6,6 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
-	"log"
 	"time"
 
 	"github.com/jackc/pgx/v5/pgconn"
@@ -61,7 +60,6 @@ func RegisterService(db *pgxpool.Pool, ctx context.Context, register Register) (
 	err = db.QueryRow(ctx, query, register.Name, register.Email, passwordHash, tokenHash, expiresAt).Scan(&user.ID, &user.Name, &user.Email, &user.EmailVerified, &user.CreatedAt, &user.UpdatedAt)
 	if err != nil {
 		if pgErr, ok := errors.AsType[*pgconn.PgError](err); ok {
-			log.Println(pgErr.Code)
 			if pgErr.Code == "23505" {
 				return user, session, apperr.Conflict("email is already registered", nil)
 			}
