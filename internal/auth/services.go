@@ -62,13 +62,10 @@ func RegisterService(db *pgxpool.Pool, ctx context.Context, register Register) (
 		if pgErr, ok := errors.AsType[*pgconn.PgError](err); ok {
 			log.Println(pgErr.Code)
 			if pgErr.Code == "23505" {
-				apperr.Conflict("email is already registered", pgErr)
-				return
+				return user, session, apperr.Conflict("email is already registered", pgErr)
 			}
-			apperr.InternalServerError("unknown PgError;", err)
-			return
+			return user, session, apperr.InternalServerError("unknown PgError;", err)
 		}
-
 		return user, session, apperr.InternalServerError("error registering new user", err)
 	}
 
