@@ -12,12 +12,6 @@ import (
 	passwordvalidator "github.com/wagslane/go-password-validator"
 )
 
-type Register struct {
-	Email    string `json:"email"`
-	Name     string `json:"name"`
-	Password string `json:"password"`
-}
-
 var verifier = emailverifier.NewVerifier()
 
 func RegisterHandler(db *pgxpool.Pool) http.HandlerFunc {

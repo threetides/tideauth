@@ -8,8 +8,8 @@ CREATE EXTENSION IF NOT EXISTS citext;
 -- Tables
 CREATE TABLE users (
   id UUID PRIMARY KEY DEFAULT uuidv7(),
-  email CITEXT NOT NULL UNIQUE,
   name TEXT,
+  email CITEXT NOT NULL UNIQUE,
   email_verified BOOLEAN NOT NULL DEFAULT false,
   created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
