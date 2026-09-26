@@ -13,19 +13,9 @@ import (
 	"github.com/golang-migrate/migrate/v4"
 	_ "github.com/golang-migrate/migrate/v4/database/postgres"
 	"github.com/golang-migrate/migrate/v4/source/iofs"
-	"github.com/jackc/pgx/v5/pgxpool"
 	_ "github.com/jackc/pgx/v5/stdlib"
 	"github.com/threetides/tideauth/internal/auth"
 )
-
-type Config struct {
-	DB     *pgxpool.Pool
-	Secure bool
-}
-
-type Auth struct {
-	Config Config
-}
 
 //go:embed internal/migrations/*.sql
 var migrationFS embed.FS

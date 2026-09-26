@@ -16,6 +16,7 @@ var verifier = emailverifier.NewVerifier()
 
 func RegisterHandler(db *pgxpool.Pool, secure bool) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		// * Decode request
 		var register Register
 		err := json.NewDecoder(r.Body).Decode(&register)
 		if err != nil {
@@ -29,6 +30,7 @@ func RegisterHandler(db *pgxpool.Pool, secure bool) http.HandlerFunc {
 
 		var fieldErrors []httpx.FieldError
 
+		// * Validate and append to fieldErrors
 		if email == "" {
 			fieldErrors = append(fieldErrors, httpx.FieldError{Field: "email", Error: "email is required"})
 		} else {
@@ -60,11 +62,13 @@ func RegisterHandler(db *pgxpool.Pool, secure bool) http.HandlerFunc {
 			}
 		}
 
+		// * Return early if len(fieldErrors) > 0
 		if len(fieldErrors) > 0 {
 			httpx.WriteJSON(w, http.StatusBadRequest, "bad request", fieldErrors)
 			return
 		}
 
+		// * Insert the user into db
 		user, session, err := RegisterService(db, r.Context(), register)
 		if err != nil {
 			httpx.WriteError(w, r, err)
