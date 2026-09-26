@@ -6,7 +6,7 @@ import (
 	"log"
 	"net/http"
 
-	"github.com/threetides/tideauth_test/internal/apperr"
+	"github.com/threetides/tideauth/internal/apperr"
 )
 
 func WriteJSON(w http.ResponseWriter, statusCode int, message string, data any) {
