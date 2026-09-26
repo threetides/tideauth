@@ -68,6 +68,7 @@ func RegisterHandler(db *pgxpool.Pool) http.HandlerFunc {
 		user, err := RegisterService(db, r.Context(), register)
 		if err != nil {
 			httpx.WriteError(w, r, err)
+			return
 		}
 
 		httpx.WriteJSON(w, http.StatusCreated, "account created", user)

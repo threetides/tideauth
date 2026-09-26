@@ -7,8 +7,8 @@ import (
 	"github.com/threetides/tideauth/internal/apperr"
 )
 
-func RegisterService(db *pgxpool.Pool, ctx context.Context, register Register) (u *User, err error) {
-	var user *User
+func RegisterService(db *pgxpool.Pool, ctx context.Context, register Register) (u User, err error) {
+	var user User
 
 	query := `
 		WITH new_user AS (
@@ -30,9 +30,9 @@ func RegisterService(db *pgxpool.Pool, ctx context.Context, register Register) (
 		FROM new_user;
 	`
 
-	err = db.QueryRow(ctx, query, register.Name, register.Email, "password_hash", "token_hash").Scan(&user)
+	err = db.QueryRow(ctx, query, register.Name, register.Email, "password_hash", "token_hash").Scan(&user.ID, &user.Name, &user.Email, &user.EmailVerified, &user.CreatedAt, &user.UpdatedAt)
 	if err != nil {
-		return nil, apperr.InternalServerError("error registering new user", err)
+		return user, apperr.InternalServerError("error registering new user", err)
 	}
 
 	return user, nil
