@@ -66,6 +66,7 @@ func RegisterService(db *pgxpool.Pool, ctx context.Context, register Register) (
 				return
 			}
 			apperr.InternalServerError("unknown PgError;", err)
+			return
 		}
 
 		return user, session, apperr.InternalServerError("error registering new user", err)
