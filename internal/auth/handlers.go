@@ -51,7 +51,7 @@ func RegisterHandler(db *pgxpool.Pool) http.HandlerFunc {
 		if name == "" {
 			fieldErrors = append(fieldErrors, httpx.FieldError{Field: "name", Error: "name is required"})
 		} else {
-			if len(email) > 100 {
+			if len(name) > 100 {
 				fieldErrors = append(fieldErrors, httpx.FieldError{Field: "name", Error: "name cannot contain more than 100 characters"})
 			}
 		}
