@@ -72,6 +72,6 @@ func New(cfg Config) Auth {
 
 func (a *Auth) Routes() *http.ServeMux {
 	mux := http.NewServeMux()
-	mux.HandleFunc("POST /api/auth/register", auth.RegisterHandler(a.Config.DB))
+	mux.HandleFunc("POST /auth/register", auth.RegisterHandler(a.Config.DB))
 	return mux
 }
