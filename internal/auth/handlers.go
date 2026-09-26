@@ -51,7 +51,6 @@ func RegisterHandler(db *pgxpool.Pool) http.HandlerFunc {
 			}
 			if !res.Syntax.Valid {
 				fieldErrors = append(fieldErrors, httpx.FieldError{Field: "email", Error: "email is invalid"})
-				return
 			}
 		}
 
