@@ -3,7 +3,6 @@ package auth
 import (
 	"encoding/json"
 	"fmt"
-	"log"
 	"net/http"
 	"strings"
 
@@ -44,12 +43,7 @@ func RegisterHandler(db *pgxpool.Pool) http.HandlerFunc {
 			}
 
 			res, err := verifier.Verify(email)
-			if err != nil {
-				log.Println("verify email address failed: ", err)
-				httpx.WriteJSON(w, http.StatusInternalServerError, "internal server error", nil)
-				return
-			}
-			if !res.Syntax.Valid {
+			if err != nil || !res.Syntax.Valid {
 				fieldErrors = append(fieldErrors, httpx.FieldError{Field: "email", Error: "email is invalid"})
 			}
 		}
