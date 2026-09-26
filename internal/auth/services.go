@@ -5,8 +5,10 @@ import (
 	"crypto/rand"
 	"crypto/sha256"
 	"encoding/hex"
+	"errors"
 	"time"
 
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/threetides/tideauth/internal/apperr"
 	"golang.org/x/crypto/bcrypt"
@@ -56,6 +58,14 @@ func RegisterService(db *pgxpool.Pool, ctx context.Context, register Register) (
 
 	err = db.QueryRow(ctx, query, register.Name, register.Email, passwordHash, tokenHash, expiresAt).Scan(&user.ID, &user.Name, &user.Email, &user.EmailVerified, &user.CreatedAt, &user.UpdatedAt)
 	if err != nil {
+		if pgErr, ok := errors.AsType[*pgconn.PgError](err); ok {
+			if pgErr.Code == "23505" {
+				apperr.Conflict("email is already registered", pgErr)
+				return
+			}
+			apperr.InternalServerError("unknown PgError;", err)
+		}
+
 		return user, session, apperr.InternalServerError("error registering new user", err)
 	}
 
