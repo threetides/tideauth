@@ -19,7 +19,8 @@ import (
 )
 
 type Config struct {
-	DB *pgxpool.Pool
+	DB     *pgxpool.Pool
+	Secure bool
 }
 
 type Auth struct {
@@ -72,6 +73,6 @@ func New(cfg Config) Auth {
 
 func (a *Auth) Routes() *http.ServeMux {
 	mux := http.NewServeMux()
-	mux.HandleFunc("POST /auth/register", auth.RegisterHandler(a.Config.DB))
+	mux.HandleFunc("POST /auth/register", auth.RegisterHandler(a.Config.DB, a.Config.Secure))
 	return mux
 }

@@ -14,7 +14,7 @@ import (
 
 var verifier = emailverifier.NewVerifier()
 
-func RegisterHandler(db *pgxpool.Pool) http.HandlerFunc {
+func RegisterHandler(db *pgxpool.Pool, secure bool) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var register Register
 		err := json.NewDecoder(r.Body).Decode(&register)
@@ -65,11 +65,22 @@ func RegisterHandler(db *pgxpool.Pool) http.HandlerFunc {
 			return
 		}
 
-		user, err := RegisterService(db, r.Context(), register)
+		user, session, err := RegisterService(db, r.Context(), register)
 		if err != nil {
 			httpx.WriteError(w, r, err)
 			return
 		}
+
+		// * Store token in httpOnlyCookie
+		http.SetCookie(w, &http.Cookie{
+			Name:     "session",
+			Value:    session.Token,
+			Expires:  session.ExpiresAt,
+			HttpOnly: true,
+			Secure:   secure, // Set to true in production (HTTPS)
+			SameSite: http.SameSiteLaxMode,
+			Path:     "/",
+		})
 
 		httpx.WriteJSON(w, http.StatusCreated, "account created", user)
 	}
