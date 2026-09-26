@@ -5,6 +5,7 @@ import (
 	_ "embed"
 	"fmt"
 	"log"
+	"net/http"
 	"os"
 	"time"
 
@@ -12,11 +13,13 @@ import (
 	"github.com/golang-migrate/migrate/v4"
 	_ "github.com/golang-migrate/migrate/v4/database/postgres"
 	"github.com/golang-migrate/migrate/v4/source/iofs"
+	"github.com/jackc/pgx/v5/pgxpool"
 	_ "github.com/jackc/pgx/v5/stdlib"
+	"github.com/threetides/tideauth/internal/auth"
 )
 
 type Config struct {
-	DBurl string
+	DB *pgxpool.Pool
 }
 
 type Auth struct {
@@ -44,7 +47,7 @@ func (a *Auth) Migrate() error {
 	m, err := migrate.NewWithSourceInstance(
 		"file://internal/migrations",
 		sourceDriver,
-		a.Config.DBurl,
+		a.Config.DB.Config().ConnString(),
 	)
 	if err != nil {
 		return fmt.Errorf("failed to initialize migration: %w", err)
@@ -65,4 +68,12 @@ func New(cfg Config) Auth {
 	return Auth{
 		Config: cfg,
 	}
+}
+
+func (a *Auth) Routes() *http.ServeMux {
+	mux := http.NewServeMux()
+
+	mux.HandleFunc("POST /api/auth/register", auth.RegisterHandler(a.Config.DB))
+
+	return mux
 }
