@@ -95,18 +95,17 @@ func LoginService(db *pgxpool.Pool, ctx context.Context, login Login) (User, Ses
 
 	// * Create CTE query
 	selectPasswordHashQuery := `
-		SELECT user_id, password_hash
-		FROM passwords
-		INNER JOIN users 
-		ON passwords.user_id = users.id
+		SELECT users.id, users.name, users.email, users.email_verified, users.created_at, users.updated_at, passwords.password_hash
+		FROM users
+		INNER JOIN passwords 
+		ON users.id = passwords.user_id
 		WHERE users.email = $1
 	`
 
-	var userID string
 	var passwordHash string
 
 	// * Perform query and check for PgError
-	err := db.QueryRow(ctx, selectPasswordHashQuery, login.Email).Scan(&userID, &passwordHash)
+	err := db.QueryRow(ctx, selectPasswordHashQuery, login.Email).Scan(&user.ID, &user.Name, &user.Email, &user.EmailVerified, &user.CreatedAt, &user.UpdatedAt, &passwordHash)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return user, session, apperr.NotFound("email not found")
@@ -129,7 +128,7 @@ func LoginService(db *pgxpool.Pool, ctx context.Context, login Login) (User, Ses
 	`
 
 	// * Perform query and check for PgError
-	_, err = db.Exec(ctx, insertSessionQuery, userID, tokenHash, expiresAt)
+	_, err = db.Exec(ctx, insertSessionQuery, user.ID, tokenHash, expiresAt)
 	if err != nil {
 		if pgErr, ok := errors.AsType[*pgconn.PgError](err); ok {
 			return user, session, apperr.InternalServerError("unknown PgError;", pgErr)
