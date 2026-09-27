@@ -118,7 +118,7 @@ func LoginService(db *pgxpool.Pool, ctx context.Context, login Login) (User, Ses
 	}
 
 	// * Compare password with password_hash
-	err = bcrypt.CompareHashAndPassword([]byte(tokenHash), []byte(login.Password))
+	err = bcrypt.CompareHashAndPassword([]byte(passwordHash), []byte(login.Password))
 	if err != nil {
 		return user, session, apperr.Unauthorized()
 	}
