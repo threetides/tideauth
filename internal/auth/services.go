@@ -109,11 +109,10 @@ func LoginService(db *pgxpool.Pool, ctx context.Context, login Login) (User, Ses
 	// * Perform query and check for PgError
 	err := db.QueryRow(ctx, selectPasswordHashQuery, login.Email).Scan(&userID, &passwordHash)
 	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return user, session, apperr.NotFound("email not found")
+		}
 		if pgErr, ok := errors.AsType[*pgconn.PgError](err); ok {
-			if errors.Is(err, pgx.ErrNoRows) {
-				return user, session, apperr.NotFound("email not found")
-			}
-
 			return user, session, apperr.InternalServerError("unknown PgError;", pgErr)
 		}
 		return user, session, apperr.InternalServerError("error getting password_hash", err)
