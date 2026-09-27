@@ -6,7 +6,6 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
-	"log"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -118,7 +117,11 @@ func LoginService(db *pgxpool.Pool, ctx context.Context, login Login) (User, Ses
 		return user, session, apperr.InternalServerError("error getting password_hash", err)
 	}
 
-	log.Println("password hash:", passwordHash)
+	// * Compare password with password_hash
+	err = bcrypt.CompareHashAndPassword([]byte(tokenHash), []byte(login.Password))
+	if err != nil {
+		return user, session, apperr.Unauthorized()
+	}
 
 	insertSessionQuery := `
 			INSERT INTO sessions (user_id, token_hash, expires_at)

@@ -72,7 +72,7 @@ func Forbidden() error {
 	return &Apperr{Kind: KindForbidden, Message: "forbidden"}
 }
 func NotFound(msg string) error {
-	return &Apperr{Kind: KindNotFound, Message: fmt.Sprintf("bad request: %s", msg)}
+	return &Apperr{Kind: KindNotFound, Message: fmt.Sprintf("not found: %s", msg)}
 }
 func Conflict(msg string, data any) error {
 	return &Apperr{Kind: KindConflict, Message: fmt.Sprintf("conflict: %s", msg), Data: data}
