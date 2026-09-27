@@ -86,6 +86,57 @@ func RegisterHandler(db *pgxpool.Pool, secure bool) http.HandlerFunc {
 			Path:     "/",
 		})
 
-		httpx.WriteJSON(w, http.StatusCreated, "account created", user)
+		httpx.WriteJSON(w, http.StatusCreated, "signed up", user)
+	}
+}
+
+func LoginHandler(db *pgxpool.Pool, secure bool) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		// * Decode request
+		var login Login
+		err := json.NewDecoder(r.Body).Decode(&login)
+		if err != nil {
+			httpx.WriteJSON(w, http.StatusBadRequest, "invalid json", nil)
+			return
+		}
+
+		email := strings.TrimSpace(login.Email)
+		password := login.Password
+
+		var fieldErrors []httpx.FieldError
+
+		// * Validate and append to fieldErrors
+		if email == "" {
+			fieldErrors = append(fieldErrors, httpx.FieldError{Field: "email", Error: "email is required"})
+		}
+		if password == "" {
+			fieldErrors = append(fieldErrors, httpx.FieldError{Field: "password", Error: "password is required"})
+		}
+
+		// * Return early if len(fieldErrors) > 0
+		if len(fieldErrors) > 0 {
+			httpx.WriteJSON(w, http.StatusBadRequest, "bad request", fieldErrors)
+			return
+		}
+
+		// * Insert the user into db
+		user, session, err := LoginService(db, r.Context(), login)
+		if err != nil {
+			httpx.WriteError(w, r, err)
+			return
+		}
+
+		// * Store token in httpOnlyCookie
+		http.SetCookie(w, &http.Cookie{
+			Name:     "session",
+			Value:    session.Token,
+			Expires:  session.ExpiresAt,
+			HttpOnly: true,
+			Secure:   secure, // Set to true in production (HTTPS)
+			SameSite: http.SameSiteLaxMode,
+			Path:     "/",
+		})
+
+		httpx.WriteJSON(w, http.StatusCreated, "signed in", user)
 	}
 }

@@ -6,6 +6,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
+	"log"
 	"time"
 
 	"github.com/jackc/pgx/v5/pgconn"
@@ -63,12 +64,73 @@ func RegisterService(db *pgxpool.Pool, ctx context.Context, register Register) (
 			if pgErr.Code == "23505" {
 				return user, session, apperr.Conflict("email is already registered", nil)
 			}
-			return user, session, apperr.InternalServerError("unknown PgError;", err)
+			return user, session, apperr.InternalServerError("unknown PgError;", pgErr)
 		}
 		return user, session, apperr.InternalServerError("error registering new user", err)
 	}
 
-	// * Create session
+	// * Create session cookie
+	session = Session{
+		UserID:    user.ID,
+		Token:     token,
+		ExpiresAt: expiresAt,
+	}
+
+	return user, session, nil
+}
+
+func LoginService(db *pgxpool.Pool, ctx context.Context, login Login) (User, Session, error) {
+	var user User
+	var session Session
+	expiresAt := time.Now().AddDate(0, 0, 30)
+
+	// * Generate random token and token hash
+	tokenBytesbytes := make([]byte, 32)
+	if _, err := rand.Read(tokenBytesbytes); err != nil {
+		return user, session, apperr.InternalServerError("error generating random token", err)
+	}
+	token := hex.EncodeToString(tokenBytesbytes)
+	hash := sha256.Sum256([]byte(token))
+	tokenHash := hex.EncodeToString(hash[:])
+
+	// * Create CTE query
+	selectPasswordHashQuery := `
+		SELECT user_id, password_hash
+		FROM passwords
+		INNER JOIN users 
+		ON passwords.user_id = users.id
+		WHERE users.email = $1
+	`
+
+	var userID string
+	var passwordHash string
+
+	// * Perform query and check for PgError
+	err := db.QueryRow(ctx, selectPasswordHashQuery, login.Email).Scan(&userID, &passwordHash)
+	if err != nil {
+		if pgErr, ok := errors.AsType[*pgconn.PgError](err); ok {
+			return user, session, apperr.InternalServerError("unknown PgError;", pgErr)
+		}
+		return user, session, apperr.InternalServerError("error getting password_hash", err)
+	}
+
+	log.Println("password hash:", passwordHash)
+
+	insertSessionQuery := `
+			INSERT INTO sessions (user_id, token_hash, expires_at)
+			VALUES ($1, $2, $3)
+	`
+
+	// * Perform query and check for PgError
+	_, err = db.Exec(ctx, insertSessionQuery, userID, tokenHash, expiresAt)
+	if err != nil {
+		if pgErr, ok := errors.AsType[*pgconn.PgError](err); ok {
+			return user, session, apperr.InternalServerError("unknown PgError;", pgErr)
+		}
+		return user, session, apperr.InternalServerError("error getting password_hash", err)
+	}
+
+	// * Create session cookie
 	session = Session{
 		UserID:    user.ID,
 		Token:     token,
